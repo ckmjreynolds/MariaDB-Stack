@@ -1,0 +1,101 @@
+# **************************************************************************************
+# MIT License
+#
+# Copyright (c) 2019 Chris Reynolds
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+#
+#  History:
+#
+#  Date        Author  Description
+#  ----        ------  -----------
+#  2019-11-23  CDR     Initial Version
+# **************************************************************************************
+version: "3.7"
+
+services:
+  nineveh:
+    image: galera:0.1.0
+    ports:
+      - 3301:3306
+    volumes:
+      - "./MariaDB/mysql/nineveh:/var/lib/mysql"
+    deploy:
+      replicas: 0
+      restart_policy:
+        condition: none
+      placement:
+        constraints:
+          - node.hostname == docker-desktop
+    environment:
+      - MYSQL_ROOT_PASSWORD_FILE=/run/secrets/MYSQL_ROOT_PASSWORD
+      - WSREP_CLUSTER_ADDRESS=gcomm://nineveh,alexandria,pergamum
+      - WSREP_NODE_NAME=nineveh
+      - WSREP_NODE_ADDRESS=nineveh
+      - ITS_RECV_BIND=0.0.0.0
+    secrets:
+      - MYSQL_ROOT_PASSWORD
+
+  alexandria:
+    image: galera:0.1.0
+    ports:
+      - 3302:3306
+    volumes:
+      - "./MariaDB/mysql/alexandria:/var/lib/mysql"
+    deploy:
+      replicas: 0
+      restart_policy:
+        condition: none
+      placement:
+        constraints:
+          - node.hostname == docker-desktop
+    environment:
+      - MYSQL_ROOT_PASSWORD_FILE=/run/secrets/MYSQL_ROOT_PASSWORD
+      - WSREP_CLUSTER_ADDRESS=gcomm://nineveh,alexandria,pergamum
+      - WSREP_NODE_NAME=alexandria
+      - WSREP_NODE_ADDRESS=alexandria
+      - ITS_RECV_BIND=0.0.0.0
+    secrets:
+      - MYSQL_ROOT_PASSWORD
+
+  pergamum:
+    image: galera:0.1.0
+    ports:
+      - 3303:3306
+    volumes:
+      - "./MariaDB/mysql/pergamum:/var/lib/mysql"
+    deploy:
+      replicas: 0
+      restart_policy:
+        condition: none
+      placement:
+        constraints:
+          - node.hostname == docker-desktop
+    environment:
+      - MYSQL_ROOT_PASSWORD_FILE=/run/secrets/MYSQL_ROOT_PASSWORD
+      - WSREP_CLUSTER_ADDRESS=gcomm://nineveh,alexandria,pergamum
+      - WSREP_NODE_NAME=pergamum
+      - WSREP_NODE_ADDRESS=pergamum
+      - ITS_RECV_BIND=0.0.0.0
+    secrets:
+      - MYSQL_ROOT_PASSWORD
+
+secrets:
+  MYSQL_ROOT_PASSWORD:
+    external: true
