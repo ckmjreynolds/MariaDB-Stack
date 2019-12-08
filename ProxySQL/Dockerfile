@@ -1,4 +1,3 @@
-#!/bin/bash
 # **************************************************************************************
 # MIT License
 #
@@ -29,39 +28,25 @@
 #  2019-11-24  CDR     Initial Version
 # **************************************************************************************
 
-# Bring in the original entrypoint, it is designed to permit this.
-source /docker-entrypoint.sh "$@"
+FROM mariadb:10.4.10-bionic AS builder
 
-# If container is started as root user, restart as dedicated mysql user
-if [ "$(id -u)" = "0" ]; then
-	mysql_note "Switching to dedicated user 'mysql'"
-	exec gosu mysql "$BASH_SOURCE" "$@"
-fi
+FROM proxysql/proxysql:2.0.8
+LABEL maintainer="46268121+ckmjreynolds@users.noreply.github.com"
 
-# Get the MYSQL_ROOT_PASSWORD from the secrets file.
-file_env 'MYSQL_ROOT_PASSWORD'
+RUN \
+	apt-get update; \
+	apt-get install -y gettext-base; \
+	rm -rf /var/lib/apt/lists/*;
 
-# Get the PROXYSQL_USER_PASSWORD from the secrets file.
-file_env 'PROXYSQL_USER_PASSWORD'
+COPY --from=builder /docker-entrypoint.sh .
+COPY startup.sh /usr/local/bin/
 
-# Get the PROXYSQL_ADMIN_PASSWORD from the secrets file.
-file_env 'PROXYSQL_ADMIN_PASSWORD'
+# Copy our configuration files (and templates).
+COPY proxysql.template /etc/proxysql.template
 
-# Replace placeholders in the .sql files.
-for f in /docker-entrypoint-initdb.d/*.template; do
-	envsubst < "$f" > "${f%.template}.sql"
-done
+# 6032 ProxySQL Admin
+# 6033 ProxySQL Proxy
+# 6080 ProxySQL Web Admin
+EXPOSE 6032 6033 6080
 
-# Replace placeholders in the .cnf files.
-for f in /etc/mysql/conf.d/*.template; do
-	# Bootstrap if we're asked.
-	if [ -f /var/lib/mysql/bootstrap ]; then
-		# Transfer control to the original ENTRYPOINT only if bootstrapping.
-		env WSREP_CLUSTER_ADDRESS="gcomm://" envsubst < "$f" > "${f%.template}.cnf"
-		rm -f /var/lib/mysql/bootstrap
-		_main "$@"
-else
-		envsubst < "$f" > "${f%.template}.cnf"
-		exec "$@"
-	fi
-done
+ENTRYPOINT ["startup.sh"]

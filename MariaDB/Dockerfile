@@ -25,7 +25,7 @@
 #
 #  Date        Author  Description
 #  ----        ------  -----------
-#  2019-11-23  CDR     Initial Version
+#  2019-12-06  CDR     Initial Version
 # **************************************************************************************
 
 FROM mariadb:10.4.10-bionic
@@ -33,17 +33,21 @@ LABEL maintainer="46268121+ckmjreynolds@users.noreply.github.com"
 
 RUN \
 	apt-get update; \
-	apt-get install -y gettext-base; \
+	apt-get install -y gettext-base openssl; \
 	rm -rf /var/lib/apt/lists/*;
 
 # The official MariaDB docker image's ENTRYPOINT script (docker-entrypoint.sh)
 # performs initialization and then transfers control to mysqld. We will inject
 # ourselves into this flow by tricking it into calling with our startup script.
 COPY startup.sh /usr/local/bin/
-RUN chown -R mysql:mysql /etc/mysql/conf.d
+COPY backup.sh /usr/local/bin/
 
 # Copy our configuration files (and templates).
 COPY conf.d/* /etc/mysql/conf.d/
+RUN chown -R mysql:mysql /etc/mysql/conf.d
+
+COPY initdb.d/* /docker-entrypoint-initdb.d/
+RUN chown -R mysql:mysql docker-entrypoint-initdb.d
 
 # 3306 is the default port for MySQL client connections and State Snapshot Transfer using mysqldump for backups.
 # 4567 is reserved for Galera Cluster replication traffic. Multicast replication uses both TCP and UDP transport on this port.

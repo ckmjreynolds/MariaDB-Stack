@@ -26,42 +26,25 @@
 #
 #  Date        Author  Description
 #  ----        ------  -----------
-#  2019-11-24  CDR     Initial Version
+#  2019-12-08  CDR     Initial Version
 # **************************************************************************************
 
-# Bring in the original entrypoint, it is designed to permit this.
-source /docker-entrypoint.sh "$@"
+# We need the directory in which we reside.
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
-# If container is started as root user, restart as dedicated mysql user
-if [ "$(id -u)" = "0" ]; then
-	mysql_note "Switching to dedicated user 'mysql'"
-	exec gosu mysql "$BASH_SOURCE" "$@"
-fi
+while [ 1 ]
+do
+clear
 
-# Get the MYSQL_ROOT_PASSWORD from the secrets file.
-file_env 'MYSQL_ROOT_PASSWORD'
+# Check the status of the docker swarm.
+docker stack ps galera
 
-# Get the PROXYSQL_USER_PASSWORD from the secrets file.
-file_env 'PROXYSQL_USER_PASSWORD'
+# Check the status of the cluster.
+$DIR/mysql -h 127.0.0.1 -P3301 -u root -p$1 -e "select variable_name, variable_value from information_schema.global_status where variable_name in ('wsrep_cluster_size', 'wsrep_local_state_comment', 'wsrep_cluster_status', 'wsrep_incoming_addresses');"
 
-# Get the PROXYSQL_ADMIN_PASSWORD from the secrets file.
-file_env 'PROXYSQL_ADMIN_PASSWORD'
+# Check the status of proxysql.
+$DIR/mysql -h 127.0.0.1 -P6032 -u radmin -p$1 -e "select hostgroup_id,hostname,status from runtime_mysql_servers;"
 
-# Replace placeholders in the .sql files.
-for f in /docker-entrypoint-initdb.d/*.template; do
-	envsubst < "$f" > "${f%.template}.sql"
-done
+sleep 60
 
-# Replace placeholders in the .cnf files.
-for f in /etc/mysql/conf.d/*.template; do
-	# Bootstrap if we're asked.
-	if [ -f /var/lib/mysql/bootstrap ]; then
-		# Transfer control to the original ENTRYPOINT only if bootstrapping.
-		env WSREP_CLUSTER_ADDRESS="gcomm://" envsubst < "$f" > "${f%.template}.cnf"
-		rm -f /var/lib/mysql/bootstrap
-		_main "$@"
-else
-		envsubst < "$f" > "${f%.template}.cnf"
-		exec "$@"
-	fi
 done

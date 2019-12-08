@@ -1,4 +1,3 @@
-#!/bin/bash
 # **************************************************************************************
 # MIT License
 #
@@ -26,33 +25,67 @@
 #
 #  Date        Author  Description
 #  ----        ------  -----------
-#  2019-11-23  CDR     Initial Version
+#  2019-12-06  CDR     Initial Version
 # **************************************************************************************
 
-# Remove any existing stack.
-docker stack remove database && sleep 15
+datadir="/var/lib/proxysql"
 
-# Build the docker images.
-cd MariaDB && docker build -t galera:0.1.0 . && cd ..
+admin_variables=
+{
+    admin_credentials="admin:${PROXYSQL_ADMIN_PASSWORD};radmin:${PROXYSQL_ADMIN_PASSWORD}"
+}
 
-# Remove any existing files.
-rm -rf ./MariaDB/mysql
+mysql_variables=
+{
+    monitor_username="proxysql"
+    monitor_password="${PROXYSQL_USER_PASSWORD}"
+}
 
-# Create new data directories for the MariaDB instances.
-mkdir -p ./MariaDB/mysql/nineveh
-mkdir -p ./MariaDB/mysql/alexandria
-mkdir -p ./MariaDB/mysql/pergamum
+mysql_galera_hostgroups =
+(
+    {
+        writer_hostgroup=1
+        reader_hostgroup=2
+				backup_writer_hostgroup=3
+        offline_hostgroup=9999
+				writer_is_also_reader=2
+        max_writers=1
+        active=1
+    }
+)
 
-# Bootstrap the cluster.
-touch ./MariaDB/mysql/nineveh/bootstrap
+mysql_servers =
+(
+    { address="nineveh" , port=3306 , hostgroup=1, weight=3, max_connections=100 },
+    { address="alexandria" , port=3306 , hostgroup=1, weight=2, max_connections=100 },
+    { address="pergamum" , port=3306 , hostgroup=1, weight=1, max_connections=100 }
+)
 
-# Deploy the stack and bootstrap.
-docker stack deploy -c docker-compose.yml database
-docker service scale database_nineveh=1 && sleep 30
+mysql_query_rules =
+(
+    {
+        rule_id=10
+        active=1
+        match_pattern="^SELECT .* FOR UPDATE"
+        destination_hostgroup=1
+        apply=1
+    },
+    {
+        rule_id=20
+        active=1
+        match_pattern="^SELECT .*"
+        destination_hostgroup=2
+        apply=1
+    },
+    {
+        rule_id=30
+        active=1
+        match_pattern=".*"
+        destination_hostgroup=1
+        apply=1
+    }
+)
 
-# Extend the cluster to the other two nodes.
-docker service scale database_alexandria=1 && sleep 30
-docker service scale database_pergamum=1 && sleep 30
-
-# Check the status of the cluster.
-./mysql -h 127.0.0.1 -P3301 -u root -ppassword -e "select variable_name, variable_value from information_schema.global_status where variable_name in ('wsrep_cluster_size', 'wsrep_local_state_comment', 'wsrep_cluster_status', 'wsrep_incoming_addresses');"
+mysql_users =
+{
+}

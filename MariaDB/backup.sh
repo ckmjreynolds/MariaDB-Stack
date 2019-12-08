@@ -26,7 +26,7 @@
 #
 #  Date        Author  Description
 #  ----        ------  -----------
-#  2019-11-24  CDR     Initial Version
+#  2019-12-06  CDR     Initial Version
 # **************************************************************************************
 
 # Bring in the original entrypoint, it is designed to permit this.
@@ -34,34 +34,23 @@ source /docker-entrypoint.sh "$@"
 
 # If container is started as root user, restart as dedicated mysql user
 if [ "$(id -u)" = "0" ]; then
-	mysql_note "Switching to dedicated user 'mysql'"
 	exec gosu mysql "$BASH_SOURCE" "$@"
 fi
 
 # Get the MYSQL_ROOT_PASSWORD from the secrets file.
 file_env 'MYSQL_ROOT_PASSWORD'
 
-# Get the PROXYSQL_USER_PASSWORD from the secrets file.
-file_env 'PROXYSQL_USER_PASSWORD'
+BACKUPDIR=/backup
+TARGETFILE=$BACKUPDIR/`date +%F_%H-%M-%S`.xb.gz.enc
 
-# Get the PROXYSQL_ADMIN_PASSWORD from the secrets file.
-file_env 'PROXYSQL_ADMIN_PASSWORD'
+# Create a FULL, compressed, encrypted backup.
+mariabackup --user=root --password=$MYSQL_ROOT_PASSWORD --backup --stream=xbstream | \
+	gzip | openssl  enc -aes-256-cbc -k $MYSQL_ROOT_PASSWORD > $TARGETFILE
 
-# Replace placeholders in the .sql files.
-for f in /docker-entrypoint-initdb.d/*.template; do
-	envsubst < "$f" > "${f%.template}.sql"
+# Delete old backups
+for DEL in `find $BACKUPDIR -maxdepth 0 -type f -mmin +$(( 30 * 24 * 60 )) -printf "%P\n"`
+do
+  echo "deleting $DEL"
+  rm -rf $BACKUPDIR/$DEL
 done
-
-# Replace placeholders in the .cnf files.
-for f in /etc/mysql/conf.d/*.template; do
-	# Bootstrap if we're asked.
-	if [ -f /var/lib/mysql/bootstrap ]; then
-		# Transfer control to the original ENTRYPOINT only if bootstrapping.
-		env WSREP_CLUSTER_ADDRESS="gcomm://" envsubst < "$f" > "${f%.template}.cnf"
-		rm -f /var/lib/mysql/bootstrap
-		_main "$@"
-else
-		envsubst < "$f" > "${f%.template}.cnf"
-		exec "$@"
-	fi
-done
+exit 0
