@@ -5,11 +5,14 @@ A simplified, reference implementation of a database stack, deployed using a Doc
 The example deployment utilizes three AWS EC2 instances running the Ubuntu distribution.
 
 ### Instances
-| Hostname | Instance Type | Operating System   | Description              |
-| :------- | :------------ | :----------------- | :----------------------- |
-| `moho`   | t3.small 2GB  | Ubuntu 18.04.3 LTS | Galera node `nineveh`    |
-| `eve`    | t3.small 2GB  | Ubuntu 18.04.3 LTS | Galera node `alexandria` |
-| `kerbin` | t3.small 2GB  | Ubuntu 18.04.3 LTS | Galera node `pergamum`   |
+
+| Hostname | Instance Type  | AZ | Operating System     | Description              |
+| :------- | :------------- | :- |:-------------------- | :----------------------- |
+| `moho`   | `t3.micro 1GB` |    | `Ubuntu 18.04.3 LTS` | Galera node `nineveh`    |
+| `eve`    | `t3.micro 1GB` |    | `Ubuntu 18.04.3 LTS` | Galera node `alexandria` |
+| `kerbin` | `t3.micro 1GB` |    | `Ubuntu 18.04.3 LTS` | Galera node `pergamum`   |
+| `duna`   | `t3.micro 1GB` |    | `Ubuntu 18.04.3 LTS` |                          |
+| `dres`   | `t3.micro 1GB` |    | `Ubuntu 18.04.3 LTS` |                          |
 
 ### Prerequisites
 - Instances created and patched.
@@ -20,6 +23,7 @@ The example deployment utilizes three AWS EC2 instances running the Ubuntu distr
 
 ### Create Directories
 Create directories for the Galera nodes on each instance.
+
 | Hostname | Command / Directory                            |
 | :------- | :--------------------------------------------- |
 | `moho`   | `mkdir --mode=777 -p ~/galera/data/nineveh`    |

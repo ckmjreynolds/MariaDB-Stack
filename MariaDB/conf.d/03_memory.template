@@ -28,12 +28,5 @@
 #  2019-12-10  CDR     Initial Version
 # **************************************************************************************
 [mariadb]
-binlog_format                   = ROW
-wsrep_on                        = ON
-wsrep_provider                  = /usr/lib/galera/libgalera_smm.so
-wsrep_sst_method                = mariabackup
-wsrep_cluster_address           = ${WSREP_CLUSTER_ADDRESS}
-wsrep_sst_auth                  = "root:${MYSQL_ROOT_PASSWORD}"
-wsrep_node_name                 = ${WSREP_NODE_NAME}
-wsrep_node_address              = ${WSREP_NODE_ADDRESS}
-wsrep_provider_options          = ist.recv_bind=0.0.0.0
+max_connections         = ${MAX_CONNECTIONS}
+innodb_buffer_pool_size = ${INNODB_BUFFER_POOL_SIZE}

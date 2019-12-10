@@ -26,7 +26,7 @@
 #
 #  Date        Author  Description
 #  ----        ------  -----------
-#  2019-11-24  CDR     Initial Version
+#  2019-12-10  CDR     Initial Version
 # **************************************************************************************
 
 # Bring in the original entrypoint, it is designed to permit this.
@@ -47,6 +47,9 @@ file_env 'PROXYSQL_USER_PASSWORD'
 # Get the PROXYSQL_ADMIN_PASSWORD from the secrets file.
 file_env 'PROXYSQL_ADMIN_PASSWORD'
 
+# Get the APP_DB_USER_PASSWORD from the secrets file.
+file_env 'APP_DB_USER_PASSWORD'
+
 # Replace placeholders in the .sql files.
 for f in /docker-entrypoint-initdb.d/*.template; do
 	envsubst < "$f" > "${f%.template}.sql"
@@ -56,12 +59,17 @@ done
 for f in /etc/mysql/conf.d/*.template; do
 	# Bootstrap if we're asked.
 	if [ -f /var/lib/mysql/bootstrap ]; then
-		# Transfer control to the original ENTRYPOINT only if bootstrapping.
 		env WSREP_CLUSTER_ADDRESS="gcomm://" envsubst < "$f" > "${f%.template}.cnf"
-		rm -f /var/lib/mysql/bootstrap
-		_main "$@"
-else
+	else
 		envsubst < "$f" > "${f%.template}.cnf"
-		exec "$@"
 	fi
 done
+
+# Bootstrap if we're asked.
+if [ -f /var/lib/mysql/bootstrap ]; then
+	# Transfer control to the original ENTRYPOINT only if bootstrapping.
+	rm -f /var/lib/mysql/bootstrap
+	_main "$@"
+else
+	exec "$@"
+fi

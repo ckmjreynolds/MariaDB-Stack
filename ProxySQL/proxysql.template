@@ -25,7 +25,7 @@
 #
 #  Date        Author  Description
 #  ----        ------  -----------
-#  2019-12-06  CDR     Initial Version
+#  2019-12-10  CDR     Initial Version
 # **************************************************************************************
 
 datadir="/var/lib/proxysql"
@@ -56,9 +56,9 @@ mysql_galera_hostgroups =
 
 mysql_servers =
 (
-    { address="nineveh" , port=3306 , hostgroup=1, weight=3, max_connections=100 },
-    { address="alexandria" , port=3306 , hostgroup=1, weight=2, max_connections=100 },
-    { address="pergamum" , port=3306 , hostgroup=1, weight=1, max_connections=100 }
+    { address="nineveh" , port=3306 , hostgroup=1, weight=3, max_connections=${MAX_PROXY_CONNECTIONS} },
+    { address="alexandria" , port=3306 , hostgroup=1, weight=2, max_connections=${MAX_PROXY_CONNECTIONS} },
+    { address="pergamum" , port=3306 , hostgroup=1, weight=1, max_connections=${MAX_PROXY_CONNECTIONS} }
 )
 
 mysql_query_rules =
@@ -87,5 +87,6 @@ mysql_query_rules =
 )
 
 mysql_users =
-{
-}
+(
+    { username = "${APP_DB_USER}", password = "${APP_DB_USER_PASSWORD}", default_hostgroup = 1, transaction_persistent = 1, active = 1 }
+)
