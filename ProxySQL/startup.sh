@@ -41,6 +41,9 @@ file_env 'PROXYSQL_USER_PASSWORD'
 # Get the PROXYSQL_ADMIN_PASSWORD from the secrets file.
 file_env 'PROXYSQL_ADMIN_PASSWORD'
 
+# Get the APP_DB_USER_PASSWORD from the secrets file.
+file_env 'APP_DB_USER_PASSWORD'
+
 # Replace placeholders in the .template files.
 for f in /etc/*.template; do
 	envsubst < "$f" > "${f%.template}.cnf"

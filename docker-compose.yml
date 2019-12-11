@@ -25,31 +25,40 @@
 #
 #  Date        Author  Description
 #  ----        ------  -----------
-#  2019-12-08  CDR     Initial Version
+#  2019-12-11  CDR     Initial Version
 # **************************************************************************************
 version: "3.7"
 
 services:
   proxysql:
-    image: ckmjreynolds/proxysql:0.1.0
+    image: ckmjreynolds/proxysql:0.1.1
     ports:
       - 6032:6032
       - 6033:6033
     deploy:
       replicas: 0
       restart_policy:
-        condition: none
+        condition: on-failure
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
     environment:
       - MYSQL_ROOT_PASSWORD_FILE=/run/secrets/MYSQL_ROOT_PASSWORD
       - PROXYSQL_USER_PASSWORD_FILE=/run/secrets/PROXYSQL_USER_PASSWORD
       - PROXYSQL_ADMIN_PASSWORD_FILE=/run/secrets/PROXYSQL_ADMIN_PASSWORD
+      - APP_DB_USER_PASSWORD_FILE=/run/secrets/APP_DB_USER_PASSWORD
+      - MAX_PROXY_CONNECTIONS=5
+      - APP_DB_USER=docquet_rest_api
     secrets:
       - MYSQL_ROOT_PASSWORD
       - PROXYSQL_USER_PASSWORD
       - PROXYSQL_ADMIN_PASSWORD
+      - APP_DB_USER_PASSWORD
 
   nineveh:
-    image: ckmjreynolds/galera:0.1.0
+    image: ckmjreynolds/galera:0.1.1
     ports:
       - 3301:3306
     volumes:
@@ -58,7 +67,12 @@ services:
     deploy:
       replicas: 0
       restart_policy:
-        condition: none
+        condition: on-failure
+      resources:
+        limits:
+          memory: 896M
+        reservations:
+          memory: 512M
       placement:
         constraints:
           # - node.hostname == docker-desktop
@@ -67,17 +81,22 @@ services:
       - MYSQL_ROOT_PASSWORD_FILE=/run/secrets/MYSQL_ROOT_PASSWORD
       - PROXYSQL_USER_PASSWORD_FILE=/run/secrets/PROXYSQL_USER_PASSWORD
       - PROXYSQL_ADMIN_PASSWORD_FILE=/run/secrets/PROXYSQL_ADMIN_PASSWORD
+      - APP_DB_USER_PASSWORD_FILE=/run/secrets/APP_DB_USER_PASSWORD
       - WSREP_CLUSTER_ADDRESS=gcomm://nineveh,alexandria,pergamum
       - WSREP_NODE_NAME=nineveh
       - WSREP_NODE_ADDRESS=nineveh
-      - ITS_RECV_BIND=0.0.0.0
+      - INNODB_BUFFER_POOL_SIZE=256M
+      - MAX_CONNECTIONS=10
+      - APP_DB=docquet
+      - APP_DB_USER=docquet_rest_api
     secrets:
       - MYSQL_ROOT_PASSWORD
       - PROXYSQL_USER_PASSWORD
       - PROXYSQL_ADMIN_PASSWORD
+      - APP_DB_USER_PASSWORD
 
   alexandria:
-    image: ckmjreynolds/galera:0.1.0
+    image: ckmjreynolds/galera:0.1.1
     ports:
       - 3302:3306
     volumes:
@@ -86,7 +105,12 @@ services:
     deploy:
       replicas: 0
       restart_policy:
-        condition: none
+        condition: on-failure
+      resources:
+        limits:
+          memory: 896M
+        reservations:
+          memory: 512M
       placement:
         constraints:
           # - node.hostname == docker-desktop
@@ -95,17 +119,22 @@ services:
       - MYSQL_ROOT_PASSWORD_FILE=/run/secrets/MYSQL_ROOT_PASSWORD
       - PROXYSQL_USER_PASSWORD_FILE=/run/secrets/PROXYSQL_USER_PASSWORD
       - PROXYSQL_ADMIN_PASSWORD_FILE=/run/secrets/PROXYSQL_ADMIN_PASSWORD
+      - APP_DB_USER_PASSWORD_FILE=/run/secrets/APP_DB_USER_PASSWORD
       - WSREP_CLUSTER_ADDRESS=gcomm://nineveh,alexandria,pergamum
       - WSREP_NODE_NAME=alexandria
       - WSREP_NODE_ADDRESS=alexandria
-      - ITS_RECV_BIND=0.0.0.0
+      - INNODB_BUFFER_POOL_SIZE=256M
+      - MAX_CONNECTIONS=10
+      - APP_DB=docquet
+      - APP_DB_USER=docquet_rest_api
     secrets:
       - MYSQL_ROOT_PASSWORD
       - PROXYSQL_USER_PASSWORD
       - PROXYSQL_ADMIN_PASSWORD
+      - APP_DB_USER_PASSWORD
 
   pergamum:
-    image: ckmjreynolds/galera:0.1.0
+    image: ckmjreynolds/galera:0.1.1
     ports:
       - 3303:3306
     volumes:
@@ -114,7 +143,12 @@ services:
     deploy:
       replicas: 0
       restart_policy:
-        condition: none
+        condition: on-failure
+      resources:
+        limits:
+          memory: 896M
+        reservations:
+          memory: 512M
       placement:
         constraints:
           # - node.hostname == docker-desktop
@@ -123,14 +157,19 @@ services:
       - MYSQL_ROOT_PASSWORD_FILE=/run/secrets/MYSQL_ROOT_PASSWORD
       - PROXYSQL_USER_PASSWORD_FILE=/run/secrets/PROXYSQL_USER_PASSWORD
       - PROXYSQL_ADMIN_PASSWORD_FILE=/run/secrets/PROXYSQL_ADMIN_PASSWORD
+      - APP_DB_USER_PASSWORD_FILE=/run/secrets/APP_DB_USER_PASSWORD
       - WSREP_CLUSTER_ADDRESS=gcomm://nineveh,alexandria,pergamum
       - WSREP_NODE_NAME=pergamum
       - WSREP_NODE_ADDRESS=pergamum
-      - ITS_RECV_BIND=0.0.0.0
+      - INNODB_BUFFER_POOL_SIZE=256M
+      - MAX_CONNECTIONS=10
+      - APP_DB=docquet
+      - APP_DB_USER=docquet_rest_api
     secrets:
       - MYSQL_ROOT_PASSWORD
       - PROXYSQL_USER_PASSWORD
       - PROXYSQL_ADMIN_PASSWORD
+      - APP_DB_USER_PASSWORD
 
 secrets:
   MYSQL_ROOT_PASSWORD:
@@ -138,4 +177,6 @@ secrets:
   PROXYSQL_USER_PASSWORD:
     external: true
   PROXYSQL_ADMIN_PASSWORD:
+    external: true
+  APP_DB_USER_PASSWORD:
     external: true
