@@ -25,7 +25,7 @@
 #
 #  Date        Author  Description
 #  ----        ------  -----------
-#  2019-12-10  CDR     Initial Version
+#  2019-12-18  CDR     Initial Version
 # **************************************************************************************
 
 datadir="/var/lib/proxysql"
@@ -39,6 +39,8 @@ mysql_variables=
 {
     monitor_username="proxysql"
     monitor_password="${PROXYSQL_USER_PASSWORD}"
+    max_allowed_packet=16777216
+    default_time_zone="${TZ}"
 }
 
 mysql_galera_hostgroups =
@@ -48,7 +50,7 @@ mysql_galera_hostgroups =
         reader_hostgroup=2
         backup_writer_hostgroup=3
         offline_hostgroup=9999
-        writer_is_also_reader=2
+        writer_is_also_reader=1
         max_writers=1
         active=1
     }
@@ -88,5 +90,6 @@ mysql_query_rules =
 
 mysql_users =
 (
-    { username = "${APP_DB_USER}", password = "${APP_DB_USER_PASSWORD}", default_hostgroup = 1, transaction_persistent = 1, active = 1 }
+    { username="root", password="${MYSQL_ROOT_PASSWORD}", default_hostgroup=1, active=1 },
+    { username="${APP_DB_USER}", password="${APP_DB_USER_PASSWORD}", default_hostgroup=1, active=1 }
 )

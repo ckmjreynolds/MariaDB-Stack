@@ -1,3 +1,4 @@
+#!/bin/bash
 # **************************************************************************************
 # MIT License
 #
@@ -25,15 +26,10 @@
 #
 #  Date        Author  Description
 #  ----        ------  -----------
-#  2019-11-20  CDR     Initial Version
+#  2020-01-10  CDR     Initial Version
 # **************************************************************************************
-[client]
-default-character-set = utf8mb4
+docker rm -f mysql
 
-[mysql]
-default-character-set = utf8mb4
-
-[mariadb]
-character-set-server = utf8mb4
-init-connect = 'SET NAMES utf8mb4'
-collation-server = utf8mb4_unicode_ci
+docker run --name mysql -e MYSQL_ROOT_PASSWORD=$1 -e MYSQL_DATABASE=testdb \
+    -e MYSQL_USER=test_user -e MYSQL_PASSWORD=$1 -p 3306:3306 -d mysql:8.0.18 #\
+#    --default-authentication-plugin=mysql_native_password
