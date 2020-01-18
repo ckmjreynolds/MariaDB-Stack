@@ -25,8 +25,7 @@
 #
 #  Date        Author  Description
 #  ----        ------  -----------
-#  2019-12-18  CDR     Initial Version
+#  2019-12-21  CDR     Initial Version
 # **************************************************************************************
-
-CREATE USER '${APP_DB_USER}'@'%' IDENTIFIED BY '${APP_DB_USER_PASSWORD}';
-GRANT ALL PRIVILEGES ON ${APP_DB}.* TO '${APP_DB_USER}'@'%';
+[mariadb]
+max_allowed_packet = 16777216

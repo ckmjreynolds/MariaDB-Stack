@@ -25,8 +25,15 @@
 #
 #  Date        Author  Description
 #  ----        ------  -----------
-#  2019-12-18  CDR     Initial Version
+#  2019-12-12  CDR     Initial Version
 # **************************************************************************************
+[client]
+default-character-set = utf8mb4
 
-CREATE USER '${APP_DB_USER}'@'%' IDENTIFIED BY '${APP_DB_USER_PASSWORD}';
-GRANT ALL PRIVILEGES ON ${APP_DB}.* TO '${APP_DB_USER}'@'%';
+[mysql]
+default-character-set = utf8mb4
+
+[mysqld]
+character-set-server = utf8mb4
+init-connect = 'SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci'
+collation-server = utf8mb4_unicode_ci

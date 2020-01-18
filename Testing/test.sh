@@ -26,7 +26,7 @@
 #
 #  Date        Author  Description
 #  ----        ------  -----------
-#  2019-12-08  CDR     Initial Version
+#  2019-12-11  CDR     Initial Version
 # **************************************************************************************
 
 # We need the directory in which we reside.
@@ -36,8 +36,8 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 docker stack remove galera && sleep 15
 
 # Build the docker images.
-cd MariaDB && docker build -t ckmjreynolds/galera:0.1.1 . && cd ..
-cd ProxySQL && docker build -t ckmjreynolds/proxysql:0.1.1 . && cd ..
+cd MariaDB && docker build -t ckmjreynolds/galera:0.1.2 . && cd ..
+cd ProxySQL && docker build -t ckmjreynolds/proxysql:0.1.2 . && cd ..
 
 # Remove any existing files.
 rm -rf ./data
