@@ -27,9 +27,10 @@
 #  ----        ------  -----------
 #  2019-12-06  CDR     Initial Version
 #  2019-12-26  CDR     Bump to MariaDB 10.4.11.
+#  2020-02-06  CDR     Bump to MariaDB 10.4.12.
 # **************************************************************************************
 
-FROM mariadb:10.4.11-bionic
+FROM mariadb:10.4.12-bionic
 LABEL maintainer="46268121+ckmjreynolds@users.noreply.github.com"
 
 RUN \

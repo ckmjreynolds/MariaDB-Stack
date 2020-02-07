@@ -27,9 +27,10 @@
 #  ----        ------  -----------
 #  2019-11-24  CDR     Initial Version
 #  2019-12-26  CDR     Bump to MariaDB 10.4.11 (for builder).
+#  2019-12-26  CDR     Bump to MariaDB 10.4.12 (for builder).
 # **************************************************************************************
 
-FROM mariadb:10.4.11-bionic AS builder
+FROM mariadb:10.4.12-bionic AS builder
 
 FROM proxysql/proxysql:2.0.8
 LABEL maintainer="46268121+ckmjreynolds@users.noreply.github.com"

@@ -26,12 +26,13 @@
 #  Date        Author  Description
 #  ----        ------  -----------
 #  2019-12-16  CDR     Initial Version
+#  2020-02-06  CDR     MariaDB 10.4.12, updated tags to match upstream.
 # **************************************************************************************
 version: "3.7"
 
 services:
   proxysql:
-    image: ckmjreynolds/proxysql:0.1.2
+    image: ckmjreynolds/proxysql:2.0.8
     ports:
       - 6032:6032
       - 6033:6033
@@ -59,7 +60,7 @@ services:
       - APP_DB_USER_PASSWORD
 
   nineveh:
-    image: ckmjreynolds/galera:0.1.2
+    image: ckmjreynolds/galera:10.4.12
     ports:
       - 3301:3306
     volumes:
@@ -98,7 +99,7 @@ services:
       - APP_DB_USER_PASSWORD
 
   alexandria:
-    image: ckmjreynolds/galera:0.1.2
+    image: ckmjreynolds/galera:10.4.12
     ports:
       - 3302:3306
     volumes:
@@ -137,7 +138,7 @@ services:
       - APP_DB_USER_PASSWORD
 
   pergamum:
-    image: ckmjreynolds/galera:0.1.2
+    image: ckmjreynolds/galera:10.4.12
     ports:
       - 3303:3306
     volumes:

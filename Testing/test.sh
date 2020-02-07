@@ -27,6 +27,7 @@
 #  Date        Author  Description
 #  ----        ------  -----------
 #  2019-12-11  CDR     Initial Version
+#  2020-02-06  CDR     MariaDB 10.4.12, updated tags to match upstream.
 # **************************************************************************************
 
 # We need the directory in which we reside.
@@ -36,8 +37,12 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 docker stack remove galera && sleep 15
 
 # Build the docker images.
-cd MariaDB && docker build -t ckmjreynolds/galera:0.1.2 . && cd ..
-cd ProxySQL && docker build -t ckmjreynolds/proxysql:0.1.2 . && cd ..
+cd MariaDB && docker build -t ckmjreynolds/galera:10.4.12 . && cd ..
+cd ProxySQL && docker build -t ckmjreynolds/proxysql:2.0.8 . && cd ..
+
+# Tag the docker images as latest.
+docker tag ckmjreynolds/galera:10.4.12 ckmjreynolds/galera:latest
+docker tag ckmjreynolds/proxysql:2.0.8 ckmjreynolds/proxysql:latest
 
 # Remove any existing files.
 rm -rf ./data

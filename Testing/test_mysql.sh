@@ -27,9 +27,10 @@
 #  Date        Author  Description
 #  ----        ------  -----------
 #  2020-01-10  CDR     Initial Version
+#  2020-02-06  CDR     MySQL 8.0.19.
 # **************************************************************************************
 docker rm -f mysql
 
 docker run --name mysql -e MYSQL_ROOT_PASSWORD=$1 -e MYSQL_DATABASE=testdb \
-    -e MYSQL_USER=test_user -e MYSQL_PASSWORD=$1 -p 3306:3306 -d mysql:8.0.18 #\
+    -e MYSQL_USER=test_user -e MYSQL_PASSWORD=$1 -p 3306:3306 -d mysql:8.0.19 #\
 #    --default-authentication-plugin=mysql_native_password
