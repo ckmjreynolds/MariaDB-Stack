@@ -1,7 +1,7 @@
 # **************************************************************************************
 # MIT License
 #
-# Copyright (c) 2019 Chris Reynolds
+# Copyright (c) 2019, 2020 Chris Reynolds
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -28,11 +28,12 @@
 #  2019-11-24  CDR     Initial Version
 #  2019-12-26  CDR     Bump to MariaDB 10.4.11 (for builder).
 #  2019-12-26  CDR     Bump to MariaDB 10.4.12 (for builder).
+#  2020-04-13  CDR     Bump to MariaDB 10.5.2 (for builder); ProxySQL 2.0.10.
 # **************************************************************************************
 
-FROM mariadb:10.4.12-bionic AS builder
+FROM mariadb:10.5.2-bionic AS builder
 
-FROM proxysql/proxysql:2.0.8
+FROM proxysql/proxysql:2.0.10
 LABEL maintainer="46268121+ckmjreynolds@users.noreply.github.com"
 
 RUN \
@@ -40,7 +41,7 @@ RUN \
 	apt-get install -y gettext-base; \
 	rm -rf /var/lib/apt/lists/*;
 
-COPY --from=builder /docker-entrypoint.sh .
+COPY --from=builder /usr/local/bin/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 COPY startup.sh /usr/local/bin/
 
 # Copy our configuration files (and templates).

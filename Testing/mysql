@@ -2,7 +2,7 @@
 # **************************************************************************************
 # MIT License
 #
-# Copyright (c) 2019 Chris Reynolds
+# Copyright (c) 2019, 2020 Chris Reynolds
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -27,6 +27,7 @@
 #  Date        Author  Description
 #  ----        ------  -----------
 #  2019-11-22  CDR     Initial Version
+#  2020-04-13  CDR     Bump to MariaDB 10.5.2.
 # **************************************************************************************
 
-docker run -it --network host --rm mariadb:10.4.10-bionic mysql --binary-as-hex "$@"
+docker run -it --network host --rm mariadb:10.5.2-bionic mysql --binary-as-hex "$@"

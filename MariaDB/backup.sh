@@ -2,7 +2,7 @@
 # **************************************************************************************
 # MIT License
 #
-# Copyright (c) 2019 Chris Reynolds
+# Copyright (c) 2019, 2020 Chris Reynolds
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -27,20 +27,21 @@
 #  Date        Author  Description
 #  ----        ------  -----------
 #  2019-12-06  CDR     Initial Version
+#  2020-04-13  CDR     Bump to MariaDB 10.5.2.
 # **************************************************************************************
 
 # Bring in the original entrypoint, it is designed to permit this.
-source /docker-entrypoint.sh "$@"
+source /usr/local/bin/docker-entrypoint.sh "$@"
 
 # If container is started as root user, restart as dedicated mysql user
-if [ "$(id -u)" = "0" ]; then
-	exec gosu mysql "$BASH_SOURCE" "$@"
-fi
+# if [ "$(id -u)" = "0" ]; then
+# 	exec gosu mysql "$BASH_SOURCE" "$@"
+# fi
 
 # Get the MYSQL_ROOT_PASSWORD from the secrets file.
 file_env 'MYSQL_ROOT_PASSWORD'
 
-BACKUPDIR=/backup
+BACKUPDIR=/mnt/backup
 TARGETFILE=$BACKUPDIR/`date +%F_%H-%M-%S`.xb.gz.enc
 
 # Create a FULL, compressed, encrypted backup.

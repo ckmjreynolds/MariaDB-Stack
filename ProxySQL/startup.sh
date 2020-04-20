@@ -2,7 +2,7 @@
 # **************************************************************************************
 # MIT License
 #
-# Copyright (c) 2019 Chris Reynolds
+# Copyright (c) 2019, 2020 Chris Reynolds
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -30,7 +30,7 @@
 # **************************************************************************************
 
 # Bring in the original entrypoint, it is designed to permit this.
-source /docker-entrypoint.sh "$@"
+source /usr/local/bin/docker-entrypoint.sh "$@"
 
 # Get the MYSQL_ROOT_PASSWORD from the secrets file.
 file_env 'MYSQL_ROOT_PASSWORD'
@@ -48,6 +48,14 @@ file_env 'APP_DB_USER_PASSWORD'
 for f in /etc/*.template; do
 	envsubst < "$f" > "${f%.template}.cnf"
 done
+
+# Replace the .cnf from the docker image if a backup exists.
+if [ -f "/mnt/backup/proxysql.cnf" ]
+then
+    cp /mnt/backup/proxysql.cnf /etc/proxysql.cnf
+else
+    cp /etc/proxysql.cnf /mnt/backup/proxysql.cnf
+fi
 
 # Start ProxySQL using the configuration file.
 exec /usr/bin/proxysql --reload -f -c /etc/proxysql.cnf

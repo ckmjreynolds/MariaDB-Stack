@@ -1,7 +1,7 @@
 # **************************************************************************************
 # MIT License
 #
-# Copyright (c) 2019 Chris Reynolds
+# Copyright (c) 2019, 2020 Chris Reynolds
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -28,9 +28,10 @@
 #  2019-12-06  CDR     Initial Version
 #  2019-12-26  CDR     Bump to MariaDB 10.4.11.
 #  2020-02-06  CDR     Bump to MariaDB 10.4.12.
+#  2020-04-13  CDR     Bump to MariaDB 10.5.2.
 # **************************************************************************************
 
-FROM mariadb:10.4.12-bionic
+FROM mariadb:10.5.2
 LABEL maintainer="46268121+ckmjreynolds@users.noreply.github.com"
 
 RUN \

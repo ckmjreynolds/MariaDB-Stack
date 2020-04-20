@@ -1,7 +1,8 @@
+#!/bin/bash
 # **************************************************************************************
 # MIT License
 #
-# Copyright (c) 2019 Chris Reynolds
+# Copyright (c) 2019, 2020 Chris Reynolds
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -25,8 +26,15 @@
 #
 #  Date        Author  Description
 #  ----        ------  -----------
-#  2019-12-18  CDR     Initial Version
+#  2019-12-11  CDR     Initial Version
+#  2020-02-06  CDR     MariaDB 10.4.12, updated tags to match upstream.
+#  2020-04-13  CDR     Bump to MariaDB 10.5.2 (for builder); ProxySQL 2.0.10.
 # **************************************************************************************
 
-CREATE USER '${APP_DB_USER}'@'%' IDENTIFIED BY '${APP_DB_USER_PASSWORD}';
-GRANT ALL PRIVILEGES ON ${APP_DB}.* TO '${APP_DB_USER}'@'%';
+# Remove any existing stack.
+docker stack remove galera && sleep 90
+docker system prune --volumes -f && sleep 30
+docker secret rm MYSQL_ROOT_PASSWORD
+docker secret rm PROXYSQL_ADMIN_PASSWORD
+docker secret rm PROXYSQL_USER_PASSWORD
+docker ps -a

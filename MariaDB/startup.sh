@@ -2,7 +2,7 @@
 # **************************************************************************************
 # MIT License
 #
-# Copyright (c) 2019 Chris Reynolds
+# Copyright (c) 2019, 2020 Chris Reynolds
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -27,10 +27,11 @@
 #  Date        Author  Description
 #  ----        ------  -----------
 #  2019-12-10  CDR     Initial Version
+#  2020-04-13  CDR     Control bootstrap via environment variable.
 # **************************************************************************************
 
 # Bring in the original entrypoint, it is designed to permit this.
-source /docker-entrypoint.sh "$@"
+source /usr/local/bin/docker-entrypoint.sh "$@"
 
 # If container is started as root user, restart as dedicated mysql user
 if [ "$(id -u)" = "0" ]; then
@@ -58,7 +59,7 @@ done
 # Replace placeholders in the .cnf files.
 for f in /etc/mysql/conf.d/*.template; do
 	# Bootstrap if we're asked.
-	if [ -f /var/lib/mysql/bootstrap ]; then
+	if [ "$BOOTSTRAP" = "true" ]; then
 		env WSREP_CLUSTER_ADDRESS="gcomm://" envsubst < "$f" > "${f%.template}.cnf"
 	else
 		envsubst < "$f" > "${f%.template}.cnf"
@@ -66,9 +67,9 @@ for f in /etc/mysql/conf.d/*.template; do
 done
 
 # Bootstrap if we're asked.
-if [ -f /var/lib/mysql/bootstrap ]; then
+if [ "$BOOTSTRAP" = "true" ]; then
 	# Transfer control to the original ENTRYPOINT only if bootstrapping.
-	rm -f /var/lib/mysql/bootstrap
+	export BOOTSTRAP="false"
 	_main "$@"
 else
 	exec "$@"
