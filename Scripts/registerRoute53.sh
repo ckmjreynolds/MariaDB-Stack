@@ -39,4 +39,6 @@ TTL=60
 HOST_NAME=$(ec2dtag --filter "resource-type=instance" --filter "resource-id=$INSTANCE_ID" --filter "key=Name"| awk '{print $5}')
 DOMAIN_NAME=$(ec2dtag --filter "resource-type=instance" --filter "resource-id=$INSTANCE_ID" --filter "key=Domain"| awk '{print $5}')
 
+sudo hostname "$HOST_NAME"
+
 /usr/local/bin/cli53 rrcreate --replace "$DOMAIN_NAME" "$HOST_NAME $TTL CNAME $PUBLIC_DNS."
