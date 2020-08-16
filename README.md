@@ -7,14 +7,14 @@ The example deployment utilizes six AWS EC2 instances running the Ubuntu distrib
 ### Instances
 | Hostname | Instance Type    | Availability Zone | Operating System     | Description    |
 | :------- | :--------------- | :---------------- |:-------------------- | :------------- |
-| `moho`   | `t3a.medium 4GB` | `us-east-1a`      | `Ubuntu 20.04.0 LTS` | Manager/Worker |
-| `eve`    | `t3a.medium 4GB` | `us-east-1a`      | `Ubuntu 20.04.0 LTS` | Manager/Worker |
-| `kerbin` | `t3a.medium 4GB` | `us-east-1a`      | `Ubuntu 20.04.0 LTS` | Manager/Worker |
-| `duna`   | `t3a.medium 4GB` | `us-east-1b`      | `Ubuntu 20.04.0 LTS` | Manager/Worker |
-| `dres`   | `t3a.medium 4GB` | `us-east-1b`      | `Ubuntu 20.04.0 LTS` | Manager/Worker |
-| `jool`   | `t3a.medium 4GB` | `us-east-1b`      | `Ubuntu 20.04.0 LTS` | Manager/Worker |
+| `moho`   | `t3a.medium 4GB` | `us-east-1a`      | `Ubuntu 20.04.1 LTS` | Manager/Worker |
+| `eve`    | `t3a.medium 4GB` | `us-east-1a`      | `Ubuntu 20.04.1 LTS` | Manager/Worker |
+| `kerbin` | `t3a.medium 4GB` | `us-east-1a`      | `Ubuntu 20.04.1 LTS` | Manager/Worker |
+| `duna`   | `t3a.medium 4GB` | `us-east-1b`      | `Ubuntu 20.04.1 LTS` | Manager/Worker |
+| `dres`   | `t3a.medium 4GB` | `us-east-1b`      | `Ubuntu 20.04.1 LTS` | Manager/Worker |
+| `jool`   | `t3a.medium 4GB` | `us-east-1b`      | `Ubuntu 20.04.1 LTS` | Manager/Worker |
 
-## 1. Setup
+## 1. Setup Swarms
 ### 1.1 Create the Security Group
 | Port/Protocol | Source               | Description                   |
 | ------------: | :------------------- | :---------------------------- |
@@ -70,71 +70,83 @@ Create a `General Purpose` EFS volume for the `backup` volume.
 - "Add storage": based on the table below:
 - "Add tags": "Name" and "Domain" with the desired Hostname and Domain.
 
-| Hostname | Device           | Size | Description         |
-| :------- | :--------------- | ---: |:------------------- |
-| `moho`   | `/dev/nvme0n1p1` | 8GB  | `/`                 |
-| `moho`   | `/dev/nvme1n1`   | 10GB | `/var/lib/mysql`    |
-| `moho`   | `/dev/nvme2n1`   | 1GB  | `/var/lib/proxysql` |
+| Hostname             | Device           | Size | Description         |
+| :------------------- | :--------------- | ---: |:------------------- |
+| `all`                | `/dev/nvme0n1p1` | 8GB  | `/`                 |
+| `all`                | `/dev/nvme1n1`   | 1GB  | `/var/lib/mysql`    |
+| `moho/eve/duna/dres` | `/dev/nvme2n1`   | 1GB  | `/var/lib/proxysql` |
+| `kerbin/jool`        | `/dev/nvme2n1`   | 10GB | `/srv`              |
 
 ### 1.5 Setup Route 53 Registration
 ```bash
-# https://gist.github.com/dfox/1677405
-# https://www.coveros.com/auto-register-an-ec2-host-with-route53-dns/
-# https://github.com/barnybug/cli53/#installation
+# Install packages.
+sudo apt-get update
 sudo apt-get install cloud-utils ec2-api-tools
+
+# Install cli53.
 wget https://github.com/barnybug/cli53/releases/download/0.8.17/cli53-linux-amd64
-sudo mv cli53-linux-amd64 /usr/local/bin/cli53
+sudo cp cli53-linux-amd64 /usr/local/bin/cli53
 sudo chmod +x /usr/local/bin/cli53
 
-ec2dtag --filter "resource-type=instance" --filter "resource-id=$(ec2metadata --instance-id)" --filter "key=Name" | awk '{print $5}'
-ec2dtag --filter "resource-type=instance" --filter "resource-id=$(ec2metadata --instance-id)" --filter "key=Domain" | awk '{print $5}'
+# Install registerRoute53.sh script.
+wget https://raw.githubusercontent.com/ckmjreynolds/MariaDB-Stack/0.1.4/Scripts/registerRoute53.sh
+sudo cp registerRoute53.sh /usr/local/bin/registerRoute53.sh
+sudo chmod +x /usr/local/bin/registerRoute53.sh
 
-ec2metadata --public-hostname
+# Schedule the script to run on reboot.
+crontab -e
+@reboot /usr/local/bin/registerRoute53.sh
 
-cli53 rrcreate example.com 'moho CNAME ec2-54-164-111-236.compute-1.amazonaws.com.'
-
-#!/bin/sh
-INSTANCE_ID=$(ec2metadata --instance-id)
-# HOST_NAME=$(ec2dtag --filter "resource-type=instance" --filter "resource-id=$INSTANCE_ID" --filter "key=Name"  awk '{print $5}')
-
-print $INSTANCE_ID
-
-#!/bin/sh
-# Original from David Fox:
-# https://gist.github.com/dfox/1677405
-#
-# Script to bind a CNAME to our HOST_NAME in ZONE
-
-# Make sure only root can run our script
-if [ "$(id -u)" != "0" ]; then
-echo "This script must be run as root" 1>&2
-exit 1
-fi
-
-# Defaults
-TTL=60
-HOST_NAME=`hostname`
-ZONE=NoZoneDefined
-
-# Load configuration
-. /etc/route53/config
-
-# Export access key ID and secret for cli53
-export AWS_ACCESS_KEY_ID
-export AWS_SECRET_ACCESS_KEY
-
-# Use command line scripts to get instance ID and public hostname
-#INSTANCE_ID=$(ec2metadata | grep 'instance-id:' | cut -d ' ' -f 2)
-MY_NAME=$HOST_NAME
-PUBLIC_HOSTNAME=$(/opt/aws/bin/ec2-metadata | grep 'public-hostname:' | cut -d ' ' -f 2)
-
-logger "ROUTE53: Setting DNS CNAME $MY_NAME.$ZONE to $PUBLIC_HOSTNAME"
-
-# Create a new CNAME record on Route 53, replacing the old entry if nessesary
-/usr/bin/cli53 rrcreate "$ZONE" "$MY_NAME" CNAME "$PUBLIC_HOSTNAME" --replace --ttl "$TTL"
+# Reboot the server and verify DNS entry is added/updated.
+sudo reboot
 ```
 
-https://www.coveros.com/auto-register-an-ec2-host-with-route53-dns/
+### 1.6 Install Docker
+#### Install Packages
+```bash
+sudo apt-get update
+sudo apt-get install docker.io
+```
+
+#### Configure Docker
+```bash
+sudo usermod -aG docker $USER
+
+# Log out and log back in.
+docker run hello-world
+docker rm -f $(docker ps -aq)
+docker rmi hello-world:latest
+```
+
+### 1.7 Patch and Create AMI
+```bash
+sudo apt-get update
+sudo apt-get upgrade
+sudo shutdown
+# Create AMI in EC2 Managment Console
+```
+
+### 1.8 Create Remaining Nodes
+Repeat the following step using the new AMI to create the remaining five nodes.
+- [1.4 Create the Instance](#14-create-the-moho-instance)
+
+### 1.9 Setup Docker Swarm
+Setup two Docker swarms, one with `moho, eve, and kerbin` and one with `duna, dres, and jool`.
+
+```bash
+# On moho
+docker swarm init
+docker swarm join-token manager
+
+# On remaining nodes, join as a worker or manager.
+docker swarm join --token <token> <ip>:2377
+```
+
+
+
+
+
+
 
 ### 0. Prerequisites
 It is assumed that the reader has a working knowledge of AWS EC2 and Docker.
