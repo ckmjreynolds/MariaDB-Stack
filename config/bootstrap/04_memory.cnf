@@ -26,7 +26,13 @@
 #  Date        Author  Description
 #  ----        ------  -----------
 #  2019-12-12  CDR     Initial Version
+#  2020-08-22  CDR     Modified for official MariaDB image.
 # **************************************************************************************
 [mariadb]
-max_connections         = ${MAX_CONNECTIONS}
-innodb_buffer_pool_size = ${INNODB_BUFFER_POOL_SIZE}
+# The current RDS MySQL max_connections setting is default by
+# {DBInstanceClassMemory/12582880}, if you use t3.micro with 1GB RAM
+# the max_connections could be (1024*1024*1024)/12582880 ~= 85.
+max_connections         = 80
+
+# {DBInstanceClassMemory*3/4}
+innodb_buffer_pool_size = 768MB

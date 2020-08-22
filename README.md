@@ -28,11 +28,11 @@ graph TD
 ```
 
 ### Instances
-| Hostname | Instance Type    | Availability Zone | Operating System      | Description              |
-| :------- | :--------------- | :---------------- |:--------------------- | :----------------------- |
-| `moho`   | `t3a.small 2GB`  | `us-east-1a`      | `Ubuntu 20.04.01 LTS` | Galera and ProxySQL Node |
-| `eve`    | `t3a.small 2GB`  | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | Galera and ProxySQL Node |
-| `kerbin` | `t3a.medium 4GB` | `us-east-1c`      | `Ubuntu 20.04.01 LTS` | Galera and PMM Node      |
+| Hostname | Instance Type    | Availability Zone | Operating System      | Description                            |
+| :------- | :--------------- | :---------------- |:--------------------- | :------------------------------------- |
+| `moho`   | `t3a.small 2GB`  | `us-east-1a`      | `Ubuntu 20.04.01 LTS` | Galera (`nineveh`) and ProxySQL Node   |
+| `eve`    | `t3a.small 2GB`  | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | Galera (`alexandria) and ProxySQL Node |
+| `kerbin` | `t3a.medium 4GB` | `us-east-1c`      | `Ubuntu 20.04.01 LTS` | Galera (`pergamum`) and PMM Node       |
 
 ## 1. Setup Swarms
 ### 1.1 Create the Security Group
@@ -97,20 +97,23 @@ Create a `General Pupose` EFS volume for the `backup` volume.
 | `moho/eve`  | `/dev/nvme2n1`   | 1GB  | `/var/lib/proxysql` |
 | `kerbin`    | `/dev/nvme2n1`   | 10GB | `/srv`              |
 
-### 1.5 Setup Route 53 Registration
+### 1.5 Clone `git` Repository
+```bash
+sudo git clone --single-branch --branch 0.1.4 https://github.com/ckmjreynolds/MariaDB-Stack.git
+```
+
+### 1.6 Setup Route 53 Registration
 ```bash
 # Install packages.
 sudo apt-get update
 sudo apt-get install cloud-utils ec2-api-tools
 
 # Install cli53.
-wget https://github.com/barnybug/cli53/releases/download/0.8.17/cli53-linux-amd64
-sudo cp cli53-linux-amd64 /usr/local/bin/cli53
+sudo cp /mnt/backup/MariaDB-Stack/Installs/cli53-linux-amd64 /usr/local/bin/cli53
 sudo chmod +x /usr/local/bin/cli53
 
 # Install registerRoute53.sh script.
-wget https://raw.githubusercontent.com/ckmjreynolds/MariaDB-Stack/0.1.4/Scripts/registerRoute53.sh
-sudo cp registerRoute53.sh /usr/local/bin/registerRoute53.sh
+sudo cp /mnt/backup/MariaDB-Stack/Scripts/registerRoute53.sh /usr/local/bin/registerRoute53.sh
 sudo chmod +x /usr/local/bin/registerRoute53.sh
 
 # Schedule the script to run on reboot.
@@ -121,7 +124,7 @@ crontab -e
 sudo reboot
 ```
 
-### 1.6 Install Docker
+### 1.7 Install Docker
 #### Install Packages
 ```bash
 sudo apt-get update
@@ -138,7 +141,7 @@ docker rm -f $(docker ps -aq)
 docker rmi hello-world:latest
 ```
 
-### 1.7 Install `pmm-client`
+### 1.8 Install `pmm-client`
 ```bash
 # Setup repository
 wget https://repo.percona.com/apt/percona-release_latest.generic_all.deb
@@ -149,7 +152,7 @@ sudo apt-get update
 sudo apt-get install pmm2-client
 ```
 
-### 1.8 Patch and Create AMI
+### 1.9 Patch and Create AMI
 ```bash
 sudo apt-get update
 sudo apt-get upgrade
@@ -157,11 +160,11 @@ sudo shutdown
 # Create AMI in EC2 Managment Console
 ```
 
-### 1.9 Create Remaining Nodes
+### 1.10 Create Remaining Nodes
 Repeat the following step using the new AMI to create the remaining nodes.
 - [1.4 Create the Instance](#14-create-the-moho-instance)
 
-### 1.10 Setup Docker Swarm
+### 1.11 Setup Docker Swarm
 Setup the Docker swarm.
 ```bash
 # On moho
@@ -172,7 +175,7 @@ docker swarm join-token manager
 docker swarm join --token <token> <ip>:2377
 ```
 
-### 1.11 Format and Mount Drives
+### 1.12 Format and Mount Drives
 ```bash
 # NAME        MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
 # nvme1n1     259:0    0    1G  0 disk 
