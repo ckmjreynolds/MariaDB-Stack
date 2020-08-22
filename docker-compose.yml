@@ -38,6 +38,8 @@ version: "3.8"
 services:
   bootstrap:
     image: mariadb:10.5.5
+    ports:
+      - 3307:3306
     volumes:
       - /var/lib/mysql:/var/lib/mysql
       - /mnt/backup/MariaDB-Stack/config/bootstrap:/etc/mysql/conf.d
