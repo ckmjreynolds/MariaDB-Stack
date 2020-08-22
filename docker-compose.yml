@@ -57,8 +57,6 @@ services:
     environment:
       - MYSQL_ROOT_PASSWORD=password
       - TZ=US/Central
-    secrets:
-      - MYSQL_ROOT_PASSWORD
 
 # services:
 #   proxysql:
