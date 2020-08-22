@@ -69,7 +69,7 @@ services:
       - /mnt/backup/MariaDB-Stack/config/alexandria:/etc/mysql/conf.d
       - /mnt/backup:/mnt/backup
     deploy:
-      replicas: 0
+      replicas: 1
       restart_policy:
         condition: on-failure
       resources:
@@ -93,7 +93,7 @@ services:
       - /mnt/backup/MariaDB-Stack/config/pergamum:/etc/mysql/conf.d
       - /mnt/backup:/mnt/backup
     deploy:
-      replicas: 0
+      replicas: 1
       restart_policy:
         condition: on-failure
       resources:
