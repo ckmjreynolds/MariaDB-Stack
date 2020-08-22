@@ -1,18 +1,38 @@
 # MariaDB-Stack
-A simplified, reference implementation of a database stack, deployed using a Docker Swarm consisting of two, three node MariaDB Galera cluster, using ProxySQL to provide load balancing, and PMM to provide monitoring.
+A simplified, reference implementation of a database stack, deployed using a Docker Swarm consisting of a three node MariaDB Galera cluster, using ProxySQL to provide load balancing, and PMM to provide monitoring.
 
 ## Example Deployment (AWS)
-The example deployment utilizes six AWS EC2 instances running the Ubuntu distribution. The sample configuration is as small as possible and not practical for most production loads.
+The example deployment utilizes three AWS EC2 instances running the Ubuntu distribution. The sample configuration is as small as possible and not practical for most production loads.
+
+### Diagram
+```mermaid
+graph TD
+    mohoPS -.-> kerbinDB
+    evePS -.-> kerbinDB
+
+    subgraph eve - Leg 2
+        evePS[\ProxySQL/]
+        eveDB[Galera]
+
+        evePS --> eveDB
+    end
+    subgraph kerbin - Backup
+        kerbinDB[Galera]
+    end
+    subgraph moho - Leg 1
+        mohoPS[\ProxySQL/]
+        mohoDB[Galera]
+
+        mohoPS --> mohoDB
+    end
+```
 
 ### Instances
-| Hostname | Instance Type    | Availability Zone | Operating System     | Description    |
-| :------- | :--------------- | :---------------- |:-------------------- | :------------- |
-| `moho`   | `t3a.medium 4GB` | `us-east-1a`      | `Ubuntu 20.04.1 LTS` | Manager/Worker |
-| `eve`    | `t3a.medium 4GB` | `us-east-1a`      | `Ubuntu 20.04.1 LTS` | Manager/Worker |
-| `kerbin` | `t3a.medium 4GB` | `us-east-1a`      | `Ubuntu 20.04.1 LTS` | Manager/Worker |
-| `duna`   | `t3a.medium 4GB` | `us-east-1b`      | `Ubuntu 20.04.1 LTS` | Manager/Worker |
-| `dres`   | `t3a.medium 4GB` | `us-east-1b`      | `Ubuntu 20.04.1 LTS` | Manager/Worker |
-| `jool`   | `t3a.medium 4GB` | `us-east-1b`      | `Ubuntu 20.04.1 LTS` | Manager/Worker |
+| Hostname | Instance Type    | Availability Zone | Operating System      | Description              |
+| :------- | :--------------- | :---------------- |:--------------------- | :----------------------- |
+| `moho`   | `t3a.small 2GB`  | `us-east-1a`      | `Ubuntu 20.04.01 LTS` | Galera and ProxySQL Node |
+| `eve`    | `t3a.small 2GB`  | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | Galera and ProxySQL Node |
+| `kerbin` | `t3a.medium 4GB` | `us-east-1c`      | `Ubuntu 20.04.01 LTS` | Galera and PMM Node      |
 
 ## 1. Setup Swarms
 ### 1.1 Create the Security Group
@@ -27,7 +47,7 @@ The example deployment utilizes six AWS EC2 instances running the Ubuntu distrib
 | `2049/TCP`    | `172.31.0.0/16`      | NFS for EFS                   |
 
 ### 1.2 Create the EFS Volume
-Create a `General Purpose` EFS volume for the `backup` volume.
+Create a `General Pupose` EFS volume for the `backup` volume.
 
 ### 1.3 Create the IAM Policy and Role `dns-updater` / `dns-updater-role`
 ```JSON
@@ -70,12 +90,12 @@ Create a `General Purpose` EFS volume for the `backup` volume.
 - "Add storage": based on the table below:
 - "Add tags": "Name" and "Domain" with the desired Hostname and Domain.
 
-| Hostname             | Device           | Size | Description         |
-| :------------------- | :--------------- | ---: |:------------------- |
-| `all`                | `/dev/nvme0n1p1` | 8GB  | `/`                 |
-| `all`                | `/dev/nvme1n1`   | 1GB  | `/var/lib/mysql`    |
-| `moho/eve/duna/dres` | `/dev/nvme2n1`   | 1GB  | `/var/lib/proxysql` |
-| `kerbin/jool`        | `/dev/nvme2n1`   | 10GB | `/srv`              |
+| Hostname    | Device           | Size | Description         |
+| :---------- | :--------------- | ---: |:------------------- |
+| `all`       | `/dev/nvme0n1p1` | 8GB  | `/`                 |
+| `all`       | `/dev/nvme1n1`   | 1GB  | `/var/lib/mysql`    |
+| `moho/eve`  | `/dev/nvme2n1`   | 1GB  | `/var/lib/proxysql` |
+| `kerbin`    | `/dev/nvme2n1`   | 10GB | `/srv`              |
 
 ### 1.5 Setup Route 53 Registration
 ```bash
@@ -118,7 +138,18 @@ docker rm -f $(docker ps -aq)
 docker rmi hello-world:latest
 ```
 
-### 1.7 Patch and Create AMI
+### 1.7 Install `pmm-client`
+```bash
+# Setup repository
+wget https://repo.percona.com/apt/percona-release_latest.generic_all.deb
+sudo dpkg -i percona-release_latest.generic_all.deb
+
+# Install the client
+sudo apt-get update
+sudo apt-get install pmm2-client
+```
+
+### 1.8 Patch and Create AMI
 ```bash
 sudo apt-get update
 sudo apt-get upgrade
@@ -126,13 +157,12 @@ sudo shutdown
 # Create AMI in EC2 Managment Console
 ```
 
-### 1.8 Create Remaining Nodes
-Repeat the following step using the new AMI to create the remaining five nodes.
+### 1.9 Create Remaining Nodes
+Repeat the following step using the new AMI to create the remaining nodes.
 - [1.4 Create the Instance](#14-create-the-moho-instance)
 
-### 1.9 Setup Docker Swarm
-Setup two Docker swarms, one with `moho, eve, and kerbin` and one with `duna, dres, and jool`.
-
+### 1.10 Setup Docker Swarm
+Setup the Docker swarm.
 ```bash
 # On moho
 docker swarm init
@@ -142,7 +172,27 @@ docker swarm join-token manager
 docker swarm join --token <token> <ip>:2377
 ```
 
+### 1.11 Format and Mount Drives
+```bash
+# NAME        MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
+# nvme1n1     259:0    0    1G  0 disk 
+# nvme2n1     259:1    0    1G  0 disk
+# NOTE: nvme2n1 is 10G on kerbin
+sudo mkfs --type=ext4 /dev/nvme1n1
+sudo mkfs --type=ext4 /dev/nvme2n1
 
+# moho, eve, and kerbin
+sudo mkdir /var/lib/mysql
+sudo mount /dev/nvme1n1 /var/lib/mysql
+
+# moho and eve
+sudo mkdir /var/lib/proxysql
+sudo mount /dev/nvme2n1 /var/lib/proxysql
+
+# kerbin
+sudo mkdir /var/lib/pmm
+sudo mount /dev/nvme2n1 /var/lib/pmm
+```
 
 
 
