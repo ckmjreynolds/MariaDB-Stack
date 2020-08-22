@@ -36,28 +36,6 @@
 version: "3.8"
 
 services:
-  bootstrap:
-    image: mariadb:10.5.5
-    volumes:
-      - /var/lib/mysql:/var/lib/mysql
-      - /mnt/backup/MariaDB-Stack/config/bootstrap:/etc/mysql/conf.d
-      - /mnt/backup:/mnt/backup
-    deploy:
-      replicas: 0
-      restart_policy:
-        condition: on-failure
-      resources:
-        limits:
-          memory: 1G
-        reservations:
-          memory: 1G
-      placement:
-        constraints:
-          - node.hostname == moho
-    environment:
-      - MYSQL_ROOT_PASSWORD=password
-      - TZ=US/Central
-
   nineveh:
     image: mariadb:10.5.5
     ports:
@@ -67,7 +45,7 @@ services:
       - /mnt/backup/MariaDB-Stack/config/nineveh:/etc/mysql/conf.d
       - /mnt/backup:/mnt/backup
     deploy:
-      replicas: 0
+      replicas: 1
       restart_policy:
         condition: on-failure
       resources:
