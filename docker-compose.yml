@@ -60,6 +60,77 @@ services:
       - MYSQL_ROOT_PASSWORD=password
       - TZ=US/Central
 
+  nineveh:
+    image: mariadb:10.5.5
+    ports:
+      - 3307:3306
+    volumes:
+      - /var/lib/mysql:/var/lib/mysql
+      - /mnt/backup/MariaDB-Stack/config/nineveh:/etc/mysql/conf.d
+      - /mnt/backup:/mnt/backup
+    deploy:
+      replicas: 0
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 1G
+      placement:
+        constraints:
+          - node.hostname == moho
+    environment:
+      - MYSQL_ROOT_PASSWORD=password
+      - TZ=US/Central
+
+  alexandria:
+    image: mariadb:10.5.5
+    ports:
+      - 3308:3306
+    volumes:
+      - /var/lib/mysql:/var/lib/mysql
+      - /mnt/backup/MariaDB-Stack/config/alexandria:/etc/mysql/conf.d
+      - /mnt/backup:/mnt/backup
+    deploy:
+      replicas: 0
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 1G
+      placement:
+        constraints:
+          - node.hostname == eve
+    environment:
+      - MYSQL_ROOT_PASSWORD=password
+      - TZ=US/Central
+
+  pergamum:
+    image: mariadb:10.5.5
+    ports:
+      - 3309:3306
+    volumes:
+      - /var/lib/mysql:/var/lib/mysql
+      - /mnt/backup/MariaDB-Stack/config/pergamum:/etc/mysql/conf.d
+      - /mnt/backup:/mnt/backup
+    deploy:
+      replicas: 0
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 1G
+      placement:
+        constraints:
+          - node.hostname == kerbin
+    environment:
+      - MYSQL_ROOT_PASSWORD=password
+      - TZ=US/Central
 # services:
 #   proxysql:
 #     image: ckmjreynolds/proxysql:2.0.10
