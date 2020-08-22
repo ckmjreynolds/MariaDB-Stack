@@ -185,22 +185,3 @@ services:
 #       - MYSQL_ROOT_PASSWORD
 #       - PROXYSQL_USER_PASSWORD
 #       - PROXYSQL_ADMIN_PASSWORD
-
-volumes:
-  nineveh-data:
-  alexandria-data:
-  pergamum-data:
-  backup:
-    driver: local
-    driver_opts:
-      type: nfs
-      o: addr=fs-12c0d692.efs.us-east-1.amazonaws.com,nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2
-      device: fs-12c0d692.efs.us-east-1.amazonaws.com:/
-
-secrets:
-  MYSQL_ROOT_PASSWORD:
-    external: true
-  PROXYSQL_USER_PASSWORD:
-    external: true
-  PROXYSQL_ADMIN_PASSWORD:
-    external: true
