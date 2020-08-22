@@ -33,6 +33,7 @@ binlog_format                   = ROW
 wsrep_on                        = ON
 wsrep_provider                  = /usr/lib/galera/libgalera_smm.so
 wsrep_sst_method                = mariabackup
+# wsrep_cluster_address           = gcomm://
 wsrep_cluster_address           = gcomm://nineveh,alexandria,pergamum
 wsrep_sst_auth                  = "root:password"
 wsrep_node_name                 = pergamum
