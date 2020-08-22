@@ -39,7 +39,7 @@ services:
   bootstrap:
     image: mariadb:10.5.5
     volumes:
-      - /var/lib/mysql:nineveh-data:/var/lib/mysql
+      - /var/lib/mysql:/var/lib/mysql
       - /mnt/backup/MariaDB-Stack/config/bootstrap:/etc/mysql/conf.d
       - /mnt/backup:/mnt/backup
     deploy:
