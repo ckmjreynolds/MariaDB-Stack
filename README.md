@@ -204,7 +204,7 @@ sudo mount /dev/nvme2n1 /var/lib/pmm
 cd /mnt/backup
 docker stack rm galera
 sleep 5
-rm -rf /var/lib/mysql/*.*
+sudo rm -rf /var/lib/mysql/*.*
 rm -rf MariaDB-Stack
 git clone --single-branch --branch 0.1.4 https://github.com/ckmjreynolds/MariaDB-Stack.git
 configureGalera.sh pass pass pass pass pass pass pass galera1

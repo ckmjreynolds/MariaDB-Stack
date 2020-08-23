@@ -117,6 +117,8 @@ services:
     environment:
       - MYSQL_ROOT_PASSWORD_FILE=/run/secrets/MYSQL_ROOT_PASSWORD
       - MYSQL_DATABASE=test
+      - MYSQL_USER=test_user
+      - MYSQL_PASSWORD=password
       - TZ=US/Central
     secrets:
       - MYSQL_ROOT_PASSWORD
@@ -143,6 +145,8 @@ services:
     environment:
       - MYSQL_ROOT_PASSWORD_FILE=/run/secrets/MYSQL_ROOT_PASSWORD
       - MYSQL_DATABASE=test
+      - MYSQL_USER=test_user
+      - MYSQL_PASSWORD=password
       - TZ=US/Central
     secrets:
       - MYSQL_ROOT_PASSWORD
@@ -169,6 +173,8 @@ services:
     environment:
       - MYSQL_ROOT_PASSWORD_FILE=/run/secrets/MYSQL_ROOT_PASSWORD
       - MYSQL_DATABASE=test
+      - MYSQL_USER=test_user
+      - MYSQL_PASSWORD=password
       - TZ=US/Central
     secrets:
       - MYSQL_ROOT_PASSWORD
