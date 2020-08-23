@@ -26,36 +26,34 @@
 #
 #  Date        Author  Description
 #  ----        ------  -----------
-#  2019-11-24  CDR     Initial Version
+#  2020-08-23  CDR     Initial Version
 # **************************************************************************************
+# We need the directory in which we reside.
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
-# Bring in the original entrypoint, it is designed to permit this.
-source /usr/local/bin/docker-entrypoint.sh "$@"
 
-# Get the MYSQL_ROOT_PASSWORD from the secrets file.
-file_env 'MYSQL_ROOT_PASSWORD'
+# Build the docker images.
+cd MariaDB && docker build -t ckmjreynolds/galera:10.5.2 . && cd ..
+cd ProxySQL && docker build -t ckmjreynolds/proxysql:2.0.10 . && cd ..
 
-# Get the PROXYSQL_USER_PASSWORD from the secrets file.
-file_env 'PROXYSQL_USER_PASSWORD'
+# Tag the docker images as latest.
+docker tag ckmjreynolds/galera:10.5.2 ckmjreynolds/galera:latest
+docker tag ckmjreynolds/proxysql:2.0.10 ckmjreynolds/proxysql:latest
 
-# Get the PROXYSQL_ADMIN_PASSWORD from the secrets file.
-file_env 'PROXYSQL_ADMIN_PASSWORD'
+# Create the secrets.
+echo $1 |docker secret create MYSQL_ROOT_PASSWORD -
+echo $1 |docker secret create PROXYSQL_ADMIN_PASSWORD -
+echo $1 |docker secret create PROXYSQL_USER_PASSWORD -
 
-# Get the APP_DB_USER_PASSWORD from the secrets file.
-file_env 'APP_DB_USER_PASSWORD'
+# Deploy the stack and bootstrap.
+docker stack deploy -c docker-compose.yml galera && sleep 30
 
-# Replace placeholders in the .template files.
-for f in /etc/*.template; do
-	envsubst < "$f" > "${f%.template}.cnf"
-done
+# Extend the cluster to the other two nodes.
+docker service scale galera_alexandria=1 && sleep 30
+docker service scale galera_pergamum=1 && sleep 30
 
-# Replace the .cnf from the docker image if a backup exists.
-if [ -f "/mnt/backup/proxysql.cnf" ]
-then
-    cp /mnt/backup/proxysql.cnf /etc/proxysql.cnf
-else
-    cp /etc/proxysql.cnf /mnt/backup/proxysql.cnf
-fi
+# Perform a backup.
+docker exec -it $(docker ps -q --filter NAME=galera_pergamum) /usr/local/bin/backup.sh
 
-# Start ProxySQL using the configuration file.
-exec /usr/bin/proxysql --reload -f -c /etc/proxysql.cnf
+# Monitor the cluster.
+$DIR/monitor.sh $1

@@ -1,4 +1,3 @@
-#!/bin/bash
 # **************************************************************************************
 # MIT License
 #
@@ -26,36 +25,13 @@
 #
 #  Date        Author  Description
 #  ----        ------  -----------
-#  2019-12-11  CDR     Initial Version
-#  2020-02-06  CDR     MariaDB 10.4.12, updated tags to match upstream.
-#  2020-04-13  CDR     Bump to MariaDB 10.5.2 (for builder); ProxySQL 2.0.10.
+#  2020-08-23  CDR     Initial Version
 # **************************************************************************************
+[mariadb]
+# The current RDS MySQL max_connections setting is default by
+# {DBInstanceClassMemory/12582880}, if you use t3.micro with 1GB RAM
+# the max_connections could be (1024*1024*1024)/12582880 ~= 85.
+max_connections         = 85
 
-# We need the directory in which we reside.
-DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-
-# Build the docker images.
-cd MariaDB && docker build -t ckmjreynolds/galera:10.5.2 . && cd ..
-cd ProxySQL && docker build -t ckmjreynolds/proxysql:2.0.10 . && cd ..
-
-# Tag the docker images as latest.
-docker tag ckmjreynolds/galera:10.5.2 ckmjreynolds/galera:latest
-docker tag ckmjreynolds/proxysql:2.0.10 ckmjreynolds/proxysql:latest
-
-# Create the secrets.
-echo $1 |docker secret create MYSQL_ROOT_PASSWORD -
-echo $1 |docker secret create PROXYSQL_ADMIN_PASSWORD -
-echo $1 |docker secret create PROXYSQL_USER_PASSWORD -
-
-# Deploy the stack and bootstrap.
-docker stack deploy -c docker-compose.yml galera && sleep 30
-
-# Extend the cluster to the other two nodes.
-docker service scale galera_alexandria=1 && sleep 30
-docker service scale galera_pergamum=1 && sleep 30
-
-# Perform a backup.
-docker exec -it $(docker ps -q --filter NAME=galera_pergamum) /usr/local/bin/backup.sh
-
-# Monitor the cluster.
-$DIR/monitor.sh $1
+# {DBInstanceClassMemory*3/4}
+innodb_buffer_pool_size = 768MB

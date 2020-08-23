@@ -25,22 +25,22 @@
 #
 #  Date        Author  Description
 #  ----        ------  -----------
-#  2019-12-18  CDR     Initial Version
+#  2020-08-23  CDR     Initial Version
 # **************************************************************************************
-
 datadir="/var/lib/proxysql"
 
 admin_variables=
 {
-    admin_credentials="admin:${PROXYSQL_ADMIN_PASSWORD};radmin:${PROXYSQL_ADMIN_PASSWORD}"
+    admin_credentials="admin:${PROXYSQL_ADMIN_PASSWORD};radmin:${PROXYSQL_RADMIN_PASSWORD}"
+    admin-stats_credentials="stats:${PROXYSQL_STATS_PASSWORD}"
 }
 
 mysql_variables=
 {
     monitor_username="proxysql"
-    monitor_password="${PROXYSQL_USER_PASSWORD}"
+    monitor_password="${PROXYSQL_PASSWORD}"
     max_allowed_packet=16777216
-    default_time_zone="${TZ}"
+    default_time_zone="US/Central"
 }
 
 mysql_galera_hostgroups =
@@ -58,9 +58,9 @@ mysql_galera_hostgroups =
 
 mysql_servers =
 (
-    { address="nineveh" , port=3306 , hostgroup=1, weight=3, max_connections=${MAX_PROXY_CONNECTIONS} },
-    { address="alexandria" , port=3306 , hostgroup=1, weight=2, max_connections=${MAX_PROXY_CONNECTIONS} },
-    { address="pergamum" , port=3306 , hostgroup=1, weight=1, max_connections=${MAX_PROXY_CONNECTIONS} }
+    { address="galera1" , port=3306 , hostgroup=1, weight=3, max_connections=20 },
+    { address="galera3" , port=3306 , hostgroup=1, weight=2, max_connections=10 },
+    { address="galera2" , port=3306 , hostgroup=1, weight=1, max_connections=10 }
 )
 
 mysql_query_rules =

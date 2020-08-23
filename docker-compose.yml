@@ -33,16 +33,60 @@
 version: "3.8"
 
 services:
-  nineveh:
+  proxysql1:
+    image: proxysql/proxysql:2.0.13
+    ports:
+      - 6032:6032
+      - 6033:6033
+    volumes:
+      - /var/lib/proxysql:/var/lib/proxysql
+    deploy:
+      replicas: 1
+      endpoint_mode: dnsrr
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          memory: 512MB
+        reservations:
+          memory: 512MB
+      placement:
+        constraints:
+          - node.hostname == moho
+
+  proxysql2:
+    image: proxysql/proxysql:2.0.13
+    ports:
+      - 6032:6032
+      - 6033:6033
+    volumes:
+      - /var/lib/proxysql:/var/lib/proxysql
+    deploy:
+      replicas: 1
+      endpoint_mode: dnsrr
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          memory: 512MB
+        reservations:
+          memory: 512MB
+      placement:
+        constraints:
+          - node.hostname == eve
+
+  galera1:
     image: mariadb:10.5.5
     ports:
-      - 3307:3306
+      - 3306:3306
     volumes:
       - /var/lib/mysql:/var/lib/mysql
-      - /mnt/backup/MariaDB-Stack/config/nineveh:/etc/mysql/conf.d
+      - /mnt/backup/MariaDB-Stack/config/galera1:/etc/mysql/conf.d
+      - /mnt/backup/MariaDB-Stack/initdb.d:/docker-entrypoint-initdb.d
       - /mnt/backup:/mnt/backup
     deploy:
-      replicas: 0
+      replicas: 1
+      endpoint_mode: dnsrr
       restart_policy:
         condition: on-failure
       resources:
@@ -59,16 +103,18 @@ services:
     secrets:
       - MYSQL_ROOT_PASSWORD
 
-  alexandria:
+  galera2:
     image: mariadb:10.5.5
     ports:
-      - 3308:3306
+      - 3306:3306
     volumes:
       - /var/lib/mysql:/var/lib/mysql
-      - /mnt/backup/MariaDB-Stack/config/alexandria:/etc/mysql/conf.d
+      - /mnt/backup/MariaDB-Stack/config/galera2:/etc/mysql/conf.d
+      - /mnt/backup/MariaDB-Stack/initdb.d:/docker-entrypoint-initdb.d
       - /mnt/backup:/mnt/backup
     deploy:
-      replicas: 0
+      replicas: 1
+      endpoint_mode: dnsrr
       restart_policy:
         condition: on-failure
       resources:
@@ -85,16 +131,18 @@ services:
     secrets:
       - MYSQL_ROOT_PASSWORD
 
-  pergamum:
+  galera3:
     image: mariadb:10.5.5
     ports:
-      - 3309:3306
+      - 3306:3306
     volumes:
       - /var/lib/mysql:/var/lib/mysql
-      - /mnt/backup/MariaDB-Stack/config/pergamum:/etc/mysql/conf.d
+      - /mnt/backup/MariaDB-Stack/config/galera3:/etc/mysql/conf.d
+      - /mnt/backup/MariaDB-Stack/initdb.d:/docker-entrypoint-initdb.d
       - /mnt/backup:/mnt/backup
     deploy:
-      replicas: 0
+      replicas: 1
+      endpoint_mode: dnsrr
       restart_policy:
         condition: on-failure
       resources:

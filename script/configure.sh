@@ -37,26 +37,47 @@ if [ -z "$*" ]; then
 	echo "    <proxysql_admin_password>"
 	echo "    <proxysql_radmin_password>"
 	echo "    <proxysql_stats_password>"
+	echo "    [<bootstrap node>] (optional)"
 	exit 0
 fi
 
+# Store the MySQL root password as a docker swarm secret.
+docker secret rm MYSQL_ROOT_PASSWORD
 echo $1 |docker secret create MYSQL_ROOT_PASSWORD -
-echo $1
-docker secret ls
+export MYSQL_ROOT_PASSWORD=$1
 
+# Save each of the remaining passwords.
 export MARIABACKUP_PASSWORD=$2
-exit 0
+export PMM_PASSWORD=$3
+export PROXYSQL_PASSWORD=$4
+export PROXYSQL_ADMIN_PASSWORD=$5
+export PROXYSQL_RADMIN_PASSWORD=$6
+export PROXYSQL_STATS_PASSWORD=$7
+
+if [ -z "$8" ]; then
+	export wsrep_cluster_address="gcomm://galera1,galera2,galera3"
+else
+	export wsrep_cluster_address="$8"
+fi
 
 # Replace placeholders in the .cfg files.
-for f in /mnt/backup/MariaDB-Stack/nineveh/config.d/*.template; do
+for f in /mnt/backup/MariaDB-Stack/galera1/config.d/*.template; do
 	envsubst < "$f" > "${f%.template}.cfg"
 done
 
-for f in /mnt/backup/MariaDB-Stack/alexandria/config.d/*.template; do
+for f in /mnt/backup/MariaDB-Stack/galera2/config.d/*.template; do
 	envsubst < "$f" > "${f%.template}.cfg"
 done
 
-for f in /mnt/backup/MariaDB-Stack/pergamum/config.d/*.template; do
+for f in /mnt/backup/MariaDB-Stack/galera3/config.d/*.template; do
+	envsubst < "$f" > "${f%.template}.cfg"
+done
+
+for f in /mnt/backup/MariaDB-Stack/proxysql1/config.d/*.template; do
+	envsubst < "$f" > "${f%.template}.cfg"
+done
+
+for f in /mnt/backup/MariaDB-Stack/proxysql2/config.d/*.template; do
 	envsubst < "$f" > "${f%.template}.cfg"
 done
 

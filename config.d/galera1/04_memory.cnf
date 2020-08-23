@@ -31,7 +31,7 @@
 # The current RDS MySQL max_connections setting is default by
 # {DBInstanceClassMemory/12582880}, if you use t3.micro with 1GB RAM
 # the max_connections could be (1024*1024*1024)/12582880 ~= 85.
-max_connections         = 80
+max_connections         = 85
 
 # {DBInstanceClassMemory*3/4}
 innodb_buffer_pool_size = 768MB

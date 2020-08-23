@@ -8,17 +8,17 @@ graph TD
     evePS -.-> kerbinDB
 
     subgraph eve - Leg 2
-        evePS[\ProxySQL/]
-        eveDB[Galera]
+        evePS[\ProxySQL2/]
+        eveDB[Galera2]
 
         evePS --> eveDB
     end
     subgraph kerbin - Backup
-        kerbinDB[Galera]
+        kerbinDB[Galera3]
     end
     subgraph moho - Leg 1
-        mohoPS[\ProxySQL/]
-        mohoDB[Galera]
+        mohoPS[\ProxySQL1/]
+        mohoDB[Galera1]
 
         mohoPS --> mohoDB
     end
@@ -26,11 +26,11 @@ graph TD
 The example deployment utilizes three AWS EC2 instances running the Ubuntu distribution. The sample configuration is as small as possible and not practical for most production loads.
 
 ### Instances
-| Hostname | Instance Type    | Availability Zone | Operating System      | Description                            |
-| :------- | :--------------- | :---------------- |:--------------------- | :------------------------------------- |
-| `moho`   | `t3a.small 2GB`  | `us-east-1a`      | `Ubuntu 20.04.01 LTS` | Galera (`nineveh`) and ProxySQL Node   |
-| `eve`    | `t3a.small 2GB`  | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | Galera (`alexandria) and ProxySQL Node |
-| `kerbin` | `t3a.medium 4GB` | `us-east-1c`      | `Ubuntu 20.04.01 LTS` | Galera (`pergamum`) and PMM Node       |
+| Hostname | Instance Type    | Availability Zone | Operating System      | Description               |
+| :------- | :--------------- | :---------------- |:--------------------- | :-------------------------|
+| `moho`   | `t3a.small 2GB`  | `us-east-1a`      | `Ubuntu 20.04.01 LTS` | `galera1` and `proxysql1` |
+| `eve`    | `t3a.small 2GB`  | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | `galera2` and `proxysql2` |
+| `kerbin` | `t3a.medium 4GB` | `us-east-1c`      | `Ubuntu 20.04.01 LTS` | `galera3` and `pmm`       |
 
 ## 1. Setup Swarms
 ### 1.1 Create the Security Group
@@ -110,11 +110,11 @@ sudo apt-get update
 sudo apt-get install cloud-utils ec2-api-tools
 
 # Install cli53.
-sudo cp /mnt/backup/MariaDB-Stack/Installs/cli53-linux-amd64 /usr/local/bin/cli53
+sudo cp /mnt/backup/MariaDB-Stack/install/cli53-linux-amd64 /usr/local/bin/cli53
 sudo chmod +x /usr/local/bin/cli53
 
 # Install registerRoute53.sh script.
-sudo cp /mnt/backup/MariaDB-Stack/Scripts/registerRoute53.sh /usr/local/bin/registerRoute53.sh
+sudo cp /mnt/backup/MariaDB-Stack/script/registerRoute53.sh /usr/local/bin/registerRoute53.sh
 sudo chmod +x /usr/local/bin/registerRoute53.sh
 
 # Schedule the script to run on reboot.
