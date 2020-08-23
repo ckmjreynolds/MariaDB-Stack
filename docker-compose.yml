@@ -116,9 +116,6 @@ services:
           - node.hostname == moho
     environment:
       - MYSQL_ROOT_PASSWORD_FILE=/run/secrets/MYSQL_ROOT_PASSWORD
-      - MYSQL_DATABASE=test
-      - MYSQL_USER=test_user
-      - MYSQL_PASSWORD=password
       - TZ=US/Central
     secrets:
       - MYSQL_ROOT_PASSWORD
@@ -144,9 +141,6 @@ services:
           - node.hostname == eve
     environment:
       - MYSQL_ROOT_PASSWORD_FILE=/run/secrets/MYSQL_ROOT_PASSWORD
-      - MYSQL_DATABASE=test
-      - MYSQL_USER=test_user
-      - MYSQL_PASSWORD=password
       - TZ=US/Central
     secrets:
       - MYSQL_ROOT_PASSWORD
@@ -172,9 +166,6 @@ services:
           - node.hostname == kerbin
     environment:
       - MYSQL_ROOT_PASSWORD_FILE=/run/secrets/MYSQL_ROOT_PASSWORD
-      - MYSQL_DATABASE=test
-      - MYSQL_USER=test_user
-      - MYSQL_PASSWORD=password
       - TZ=US/Central
     secrets:
       - MYSQL_ROOT_PASSWORD
