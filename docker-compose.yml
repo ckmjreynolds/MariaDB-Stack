@@ -52,7 +52,7 @@ services:
       - /var/lib/proxysql:/var/lib/proxysql
       - /mnt/backup/MariaDB-Stack/conf.d/proxysql1/proxysql.cnf:/etc/proxysql.cnf
     deploy:
-      replicas: 0
+      replicas: 1
       endpoint_mode: dnsrr
       restart_policy:
         condition: on-failure
@@ -80,7 +80,7 @@ services:
       - /var/lib/proxysql:/var/lib/proxysql
       - /mnt/backup/MariaDB-Stack/conf.d/proxysql2/proxysql.cnf:/etc/proxysql.cnf
     deploy:
-      replicas: 0
+      replicas: 1
       endpoint_mode: dnsrr
       restart_policy:
         condition: on-failure
