@@ -61,27 +61,27 @@ else
 fi
 
 # Replace placeholders in the .cfg files.
-for f in /mnt/backup/MariaDB-Stack/config.d/galera1/*.template; do
-	envsubst < "$f" > "${f%.template}.cfg"
+for f in /mnt/backup/MariaDB-Stack/conf.d/galera1/*.template; do
+	envsubst < "$f" > "${f%.template}"
 done
 
-for f in /mnt/backup/MariaDB-Stack/config.d/galera1/*.template; do
-	envsubst < "$f" > "${f%.template}.cfg"
+for f in /mnt/backup/MariaDB-Stack/conf.d/galera1/*.template; do
+	envsubst < "$f" > "${f%.template}"
 done
 
-for f in /mnt/backup/MariaDB-Stack/config.d/galera1/*.template; do
-	envsubst < "$f" > "${f%.template}.cfg"
+for f in /mnt/backup/MariaDB-Stack/conf.d/galera1/*.template; do
+	envsubst < "$f" > "${f%.template}"
 done
 
-for f in /mnt/backup/MariaDB-Stack/config.d/proxysql1/*.template; do
-	envsubst < "$f" > "${f%.template}.cfg"
+for f in /mnt/backup/MariaDB-Stack/conf.d/proxysql1/*.template; do
+	envsubst < "$f" > "${f%.template}"
 done
 
-for f in /mnt/backup/MariaDB-Stack/config.d/proxysql2/*.template; do
-	envsubst < "$f" > "${f%.template}.cfg"
+for f in /mnt/backup/MariaDB-Stack/conf.d/proxysql2/*.template; do
+	envsubst < "$f" > "${f%.template}"
 done
 
 # Replace placeholders in the .sql files.
 for f in /mnt/backup/MariaDB-Stack/initdb.d/*.template; do
-	envsubst < "$f" > "${f%.template}.sql"
+	envsubst < "$f" > "${f%.template}"
 done
