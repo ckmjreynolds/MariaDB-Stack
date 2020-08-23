@@ -97,7 +97,8 @@ Create a `General Pupose` EFS volume for the `backup` volume.
 
 ### 1.5 Clone `git` Repository
 ```bash
-sudo git clone --single-branch --branch 0.1.4 https://github.com/ckmjreynolds/MariaDB-Stack.git
+sudo chown -R ubuntu:ubuntu /mnt/backup
+git clone --single-branch --branch 0.1.4 https://github.com/ckmjreynolds/MariaDB-Stack.git
 
 # Add to ~/.profile.
 export PATH="$PATH:/mnt/backup/MariaDB-Stack/script"
