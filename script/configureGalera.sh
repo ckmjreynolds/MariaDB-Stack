@@ -57,7 +57,7 @@ export PROXYSQL_STATS_PASSWORD=$7
 if [ -z "$8" ]; then
 	export wsrep_cluster_address="gcomm://galera1,galera2,galera3"
 else
-	export wsrep_cluster_address="$8"
+	export wsrep_cluster_address="gcomm://"
 fi
 
 # Replace placeholders in the .cfg files.
