@@ -34,6 +34,7 @@ version: "3.8"
 
 secrets:
   MYSQL_ROOT_PASSWORD:
+    external: true
 
 services:
   proxysql1:
