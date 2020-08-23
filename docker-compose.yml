@@ -32,6 +32,10 @@
 # **************************************************************************************
 version: "3.8"
 
+secrets:
+  MYSQL_ROOT_PASSWORD:
+    external: true
+
 services:
   proxysql1:
     image: proxysql/proxysql:2.0.13
@@ -158,7 +162,3 @@ services:
       - TZ=US/Central
     secrets:
       - MYSQL_ROOT_PASSWORD
-
-  secrets:
-    MYSQL_ROOT_PASSWORD:
-      external: true
