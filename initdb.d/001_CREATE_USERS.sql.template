@@ -25,15 +25,16 @@
 #
 #  Date        Author  Description
 #  ----        ------  -----------
-#  2019-12-12  CDR     Initial Version
+#  2020-08-23  CDR     Initial Version
 # **************************************************************************************
-[client]
-default-character-set = utf8mb4
+-- Create a mariabackup account (used for SST).
+CREATE USER 'mariabackup'@'localhost' IDENTIFIED BY '${MARIABACKUP_PASSWORD}';
+GRANT RELOAD, PROCESS, LOCK TABLES, REPLICATION CLIENT ON *.* TO 'mariabackup'@'localhost';
 
-[mysql]
-default-character-set = utf8mb4
+-- Create a pmm account (used to monitor the health of the nodes).
+CREATE USER 'pmm'@'localhost' IDENTIFIED BY '${PMM_PASSWORD}' WITH MAX_USER_CONNECTIONS 10;
+GRANT SELECT, PROCESS, SUPER, REPLICATION CLIENT, RELOAD ON *.* TO 'pmm'@'localhost';
 
-[mysqld]
-character-set-server = utf8mb4
-init-connect = 'SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci'
-collation-server = utf8mb4_unicode_ci
+-- Create a proxysql account (used to monitor the health of the nodes).
+CREATE USER 'proxysql'@'%' IDENTIFIED BY '${PROXYSQL_PASSWORD}';
+GRANT USAGE, REPLICATION CLIENT ON *.* TO 'proxysql'@'%';

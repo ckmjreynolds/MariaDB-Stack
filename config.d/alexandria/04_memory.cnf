@@ -25,8 +25,7 @@
 #
 #  Date        Author  Description
 #  ----        ------  -----------
-#  2019-12-12  CDR     Initial Version
-#  2020-08-22  CDR     Modified for official MariaDB image.
+#  2020-08-23  CDR     Initial Version
 # **************************************************************************************
 [mariadb]
 # The current RDS MySQL max_connections setting is default by

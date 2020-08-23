@@ -2,9 +2,6 @@
 A simplified, reference implementation of a database stack, deployed using a Docker Swarm consisting of a three node MariaDB Galera cluster, using ProxySQL to provide load balancing, and PMM to provide monitoring.
 
 ## Example Deployment (AWS)
-The example deployment utilizes three AWS EC2 instances running the Ubuntu distribution. The sample configuration is as small as possible and not practical for most production loads.
-
-### Diagram
 ```mermaid
 graph TD
     mohoPS -.-> kerbinDB
@@ -26,6 +23,7 @@ graph TD
         mohoPS --> mohoDB
     end
 ```
+The example deployment utilizes three AWS EC2 instances running the Ubuntu distribution. The sample configuration is as small as possible and not practical for most production loads.
 
 ### Instances
 | Hostname | Instance Type    | Availability Zone | Operating System      | Description                            |
@@ -100,6 +98,9 @@ Create a `General Pupose` EFS volume for the `backup` volume.
 ### 1.5 Clone `git` Repository
 ```bash
 sudo git clone --single-branch --branch 0.1.4 https://github.com/ckmjreynolds/MariaDB-Stack.git
+
+# Add to ~/.profile.
+export PATH="$PATH:/mnt/backup/MariaDB-Stack/script"
 ```
 
 ### 1.6 Setup Route 53 Registration
@@ -146,6 +147,7 @@ docker rmi hello-world:latest
 # Setup repository
 wget https://repo.percona.com/apt/percona-release_latest.generic_all.deb
 sudo dpkg -i percona-release_latest.generic_all.deb
+rm percona-release_latest.generic_all.deb
 
 # Install the client
 sudo apt-get update

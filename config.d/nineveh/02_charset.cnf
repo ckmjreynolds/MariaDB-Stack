@@ -25,17 +25,15 @@
 #
 #  Date        Author  Description
 #  ----        ------  -----------
-#  2019-12-10  CDR     Initial Version
-#  2020-08-22  CDR     Modified for official MariaDB image.
+#  2020-08-23  CDR     Initial Version
 # **************************************************************************************
-[mariadb]
-binlog_format                   = ROW
-wsrep_on                        = ON
-wsrep_provider                  = /usr/lib/galera/libgalera_smm.so
-wsrep_sst_method                = mariabackup
-# wsrep_cluster_address           = gcomm://
-wsrep_cluster_address           = gcomm://nineveh,alexandria,pergamum
-wsrep_sst_auth                  = "root:password"
-wsrep_node_name                 = pergamum
-wsrep_node_address              = pergamum
-wsrep_provider_options          = ist.recv_bind=0.0.0.0
+[client]
+default-character-set = utf8mb4
+
+[mysql]
+default-character-set = utf8mb4
+
+[mysqld]
+character-set-server = utf8mb4
+init-connect = 'SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci'
+collation-server = utf8mb4_unicode_ci

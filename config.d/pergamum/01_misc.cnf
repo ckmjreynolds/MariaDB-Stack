@@ -1,4 +1,3 @@
-#!/bin/bash
 # **************************************************************************************
 # MIT License
 #
@@ -28,39 +27,5 @@
 #  ----        ------  -----------
 #  2020-08-23  CDR     Initial Version
 # **************************************************************************************
-if [ -z "$*" ]; then
-	echo "USAGE: configure.sh"
-	echo "    <root_password>"
-	echo "    <mariabackup_password>"
-	echo "    <pmm_password>"
-	echo "    <proxysql_password>"
-	echo "    <proxysql_admin_password>"
-	echo "    <proxysql_radmin_password>"
-	echo "    <proxysql_stats_password>"
-	exit 0
-fi
-
-echo $1 |docker secret create MYSQL_ROOT_PASSWORD -
-echo $1
-docker secret ls
-
-export MARIABACKUP_PASSWORD=$2
-exit 0
-
-# Replace placeholders in the .cfg files.
-for f in /mnt/backup/MariaDB-Stack/nineveh/config.d/*.template; do
-	envsubst < "$f" > "${f%.template}.cfg"
-done
-
-for f in /mnt/backup/MariaDB-Stack/alexandria/config.d/*.template; do
-	envsubst < "$f" > "${f%.template}.cfg"
-done
-
-for f in /mnt/backup/MariaDB-Stack/pergamum/config.d/*.template; do
-	envsubst < "$f" > "${f%.template}.cfg"
-done
-
-# Replace placeholders in the .sql files.
-for f in /mnt/backup/MariaDB-Stack/initdb.d/*.template; do
-	envsubst < "$f" > "${f%.template}.sql"
-done
+[mariadb]
+max_allowed_packet = 16777216

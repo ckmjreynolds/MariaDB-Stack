@@ -25,14 +25,15 @@
 #
 #  Date        Author  Description
 #  ----        ------  -----------
-#  2019-12-12  CDR     Initial Version
-#  2020-08-22  CDR     Modified for official MariaDB image.
+#  2020-08-23  CDR     Initial Version
 # **************************************************************************************
 [mariadb]
-# The current RDS MySQL max_connections setting is default by
-# {DBInstanceClassMemory/12582880}, if you use t3.micro with 1GB RAM
-# the max_connections could be (1024*1024*1024)/12582880 ~= 85.
-max_connections         = 80
-
-# {DBInstanceClassMemory*3/4}
-innodb_buffer_pool_size = 768MB
+binlog_format                   = ROW
+wsrep_on                        = ON
+wsrep_provider                  = /usr/lib/galera/libgalera_smm.so
+wsrep_sst_method                = mariabackup
+wsrep_cluster_address           = gcomm://nineveh,alexandria,pergamum
+wsrep_sst_auth                  = "mariabackup:${MARIABACKUP_PASSWORD}"
+wsrep_node_name                 = nineveh
+wsrep_node_address              = nineveh
+wsrep_provider_options          = ist.recv_bind=0.0.0.0

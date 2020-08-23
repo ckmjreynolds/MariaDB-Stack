@@ -25,9 +25,15 @@
 #
 #  Date        Author  Description
 #  ----        ------  -----------
-#  2019-11-24  CDR     Initial Version
+#  2020-08-23  CDR     Initial Version
 # **************************************************************************************
+[client]
+default-character-set = utf8mb4
 
--- Create a proxysql account (used to monitor the health of the nodes).
-CREATE USER 'proxysql'@'%' IDENTIFIED BY '${PROXYSQL_USER_PASSWORD}';
-GRANT USAGE, REPLICATION CLIENT ON *.* TO 'proxysql'@'%';
+[mysql]
+default-character-set = utf8mb4
+
+[mysqld]
+character-set-server = utf8mb4
+init-connect = 'SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci'
+collation-server = utf8mb4_unicode_ci

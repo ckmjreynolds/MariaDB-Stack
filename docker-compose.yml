@@ -25,9 +25,6 @@
 #
 #  Date        Author  Description
 #  ----        ------  -----------
-#  2019-12-16  CDR     Initial Version
-#  2020-02-06  CDR     MariaDB 10.4.12, updated tags to match upstream.
-#  2020-04-13  CDR     Bump to MariaDB 10.5.2, ProxySQL 2.0.10, Cloudstor.
 #  2020-08-22  CDR     Switch to official MariaDB, ProxySQL, and PMM docker images.
 #                      - MariaDB  - mariadb:10.5.5
 #                      - ProxySQL - proxysql/proxysql:2.0.13
@@ -45,7 +42,7 @@ services:
       - /mnt/backup/MariaDB-Stack/config/nineveh:/etc/mysql/conf.d
       - /mnt/backup:/mnt/backup
     deploy:
-      replicas: 1
+      replicas: 0
       restart_policy:
         condition: on-failure
       resources:
@@ -57,8 +54,10 @@ services:
         constraints:
           - node.hostname == moho
     environment:
-      - MYSQL_ROOT_PASSWORD=password
+      - MYSQL_ROOT_PASSWORD_FILE=/run/secrets/MYSQL_ROOT_PASSWORD
       - TZ=US/Central
+    secrets:
+      - MYSQL_ROOT_PASSWORD
 
   alexandria:
     image: mariadb:10.5.5
@@ -69,7 +68,7 @@ services:
       - /mnt/backup/MariaDB-Stack/config/alexandria:/etc/mysql/conf.d
       - /mnt/backup:/mnt/backup
     deploy:
-      replicas: 1
+      replicas: 0
       restart_policy:
         condition: on-failure
       resources:
@@ -81,8 +80,10 @@ services:
         constraints:
           - node.hostname == eve
     environment:
-      - MYSQL_ROOT_PASSWORD=password
+      - MYSQL_ROOT_PASSWORD_FILE=/run/secrets/MYSQL_ROOT_PASSWORD
       - TZ=US/Central
+    secrets:
+      - MYSQL_ROOT_PASSWORD
 
   pergamum:
     image: mariadb:10.5.5
@@ -93,7 +94,7 @@ services:
       - /mnt/backup/MariaDB-Stack/config/pergamum:/etc/mysql/conf.d
       - /mnt/backup:/mnt/backup
     deploy:
-      replicas: 1
+      replicas: 0
       restart_policy:
         condition: on-failure
       resources:
@@ -105,8 +106,11 @@ services:
         constraints:
           - node.hostname == kerbin
     environment:
-      - MYSQL_ROOT_PASSWORD=password
+      - MYSQL_ROOT_PASSWORD_FILE=/run/secrets/MYSQL_ROOT_PASSWORD
       - TZ=US/Central
+    secrets:
+      - MYSQL_ROOT_PASSWORD
+
 # services:
 #   proxysql:
 #     image: ckmjreynolds/proxysql:2.0.10

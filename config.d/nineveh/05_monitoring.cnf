@@ -25,7 +25,9 @@
 #
 #  Date        Author  Description
 #  ----        ------  -----------
-#  2019-12-21  CDR     Initial Version
+#  2020-08-23  CDR     Initial Version
 # **************************************************************************************
+# https://www.percona.com/doc/percona-monitoring-and-management/2.x/concepts/services-mysql.html
 [mariadb]
-max_allowed_packet = 16777216
+innodb_monitor_enable   = all
+performance_schema      = ON

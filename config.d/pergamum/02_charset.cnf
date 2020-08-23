@@ -25,7 +25,7 @@
 #
 #  Date        Author  Description
 #  ----        ------  -----------
-#  2019-12-12  CDR     Initial Version
+#  2020-08-23  CDR     Initial Version
 # **************************************************************************************
 [client]
 default-character-set = utf8mb4
