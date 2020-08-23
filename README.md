@@ -203,6 +203,7 @@ sudo mount /dev/nvme2n1 /var/lib/pmm
 ```bash
 docker stack rm galera
 sleep 5
+cd /mnt/backup
 rm -rf MariaDB-Stack
 git clone --single-branch --branch 0.1.4 https://github.com/ckmjreynolds/MariaDB-Stack.git
 configureGalera.sh pass pass pass pass pass pass pass galera1
@@ -212,4 +213,5 @@ sleep 15
 mysql.sh -h 127.0.0.1 -P6033 -u root -ppass -e "select variable_name, variable_value from information_schema.global_status where variable_name in ('wsrep_cluster_size', 'wsrep_local_state_comment', 'wsrep_cluster_status', 'wsrep_incoming_addresses');"
 sleep 5
 mysql.sh -h 127.0.0.1 -P6032 -u radmin -ppass -e "select hostgroup_id,hostname,status from runtime_mysql_servers;"
+sleep 5
 ```

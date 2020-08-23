@@ -95,6 +95,8 @@ services:
 
   galera1:
     image: mariadb:10.5.5
+    ports:
+      - 3306:3306
     volumes:
       - /var/lib/mysql:/var/lib/mysql
       - /mnt/backup/MariaDB-Stack/conf.d/galera1:/etc/mysql/conf.d
