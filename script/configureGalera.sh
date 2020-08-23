@@ -56,30 +56,30 @@ export PROXYSQL_STATS_PASSWORD=$7
 
 # Replace placeholders in the .cfg files.
 for f in /mnt/backup/MariaDB-Stack/conf.d/galera1/*.template; do
-	if [ -z "$8" ]; then
-		export WSREP_CLUSTER_ADDRESS="gcomm://galera1,galera2,galera3"
-	elif [ "$8" = "galera1"  ]; then
+	if [ "$8" == "galera1" ]; then
 		export WSREP_CLUSTER_ADDRESS="gcomm://"
+	else
+		export WSREP_CLUSTER_ADDRESS="gcomm://galera1,galera2,galera3"
 	fi
 
 	envsubst < "$f" > "${f%.template}"
 done
 
 for f in /mnt/backup/MariaDB-Stack/conf.d/galera2/*.template; do
-	if [ -z "$8" ]; then
-		export WSREP_CLUSTER_ADDRESS="gcomm://galera1,galera2,galera3"
-	elif [ "$8" = "galera2"  ]; then
+	if [ "$8" == "galera2" ]; then
 		export WSREP_CLUSTER_ADDRESS="gcomm://"
+	else
+		export WSREP_CLUSTER_ADDRESS="gcomm://galera1,galera2,galera3"
 	fi
 
 	envsubst < "$f" > "${f%.template}"
 done
 
-for f in /mnt/backup/MariaDB-Stack/conf.d/galera2/*.template; do
-	if [ -z "$8" ]; then
-		export WSREP_CLUSTER_ADDRESS="gcomm://galera1,galera2,galera3"
-	elif [ "$8" = "galera3"  ]; then
+for f in /mnt/backup/MariaDB-Stack/conf.d/galera3/*.template; do
+	if [ "$8" == "galera3" ]; then
 		export WSREP_CLUSTER_ADDRESS="gcomm://"
+	else
+		export WSREP_CLUSTER_ADDRESS="gcomm://galera1,galera2,galera3"
 	fi
 
 	envsubst < "$f" > "${f%.template}"
