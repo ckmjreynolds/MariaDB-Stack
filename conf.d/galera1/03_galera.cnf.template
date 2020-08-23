@@ -29,7 +29,7 @@
 # **************************************************************************************
 [mariadb]
 binlog_format                   = ROW
-wsrep_on                        = ON
+wsrep_on                        = OFF
 wsrep_provider                  = /usr/lib/galera/libgalera_smm.so
 wsrep_sst_method                = mariabackup
 wsrep_cluster_address           = ${WSREP_CLUSTER_ADDRESS}
