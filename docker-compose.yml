@@ -45,7 +45,8 @@ services:
     volumes:
       - /var/lib/proxysql:/var/lib/proxysql
     deploy:
-      mode: global
+      replicas: 1
+      endpoint_mode: dnsrr
       restart_policy:
         condition: on-failure
       resources:
@@ -65,7 +66,8 @@ services:
     volumes:
       - /var/lib/proxysql:/var/lib/proxysql
     deploy:
-      mode: global
+      replicas: 1
+      endpoint_mode: dnsrr
       restart_policy:
         condition: on-failure
       resources:
@@ -87,7 +89,8 @@ services:
       - /mnt/backup/MariaDB-Stack/initdb.d:/docker-entrypoint-initdb.d
       - /mnt/backup:/mnt/backup
     deploy:
-      mode: global
+      replicas: 1
+      endpoint_mode: dnsrr
       restart_policy:
         condition: on-failure
       resources:
@@ -114,7 +117,8 @@ services:
       - /mnt/backup/MariaDB-Stack/initdb.d:/docker-entrypoint-initdb.d
       - /mnt/backup:/mnt/backup
     deploy:
-      mode: global
+      replicas: 1
+      endpoint_mode: dnsrr
       restart_policy:
         condition: on-failure
       resources:
@@ -141,7 +145,8 @@ services:
       - /mnt/backup/MariaDB-Stack/initdb.d:/docker-entrypoint-initdb.d
       - /mnt/backup:/mnt/backup
     deploy:
-      mode: global
+      replicas: 1
+      endpoint_mode: dnsrr
       restart_policy:
         condition: on-failure
       resources:
