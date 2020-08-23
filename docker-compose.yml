@@ -32,10 +32,6 @@
 # **************************************************************************************
 version: "3.8"
 
-secrets:
-  MYSQL_ROOT_PASSWORD:
-    external: true
-
 services:
   proxysql1:
     image: proxysql/proxysql:2.0.13
@@ -115,10 +111,8 @@ services:
         constraints:
           - node.hostname == moho
     environment:
-      - MYSQL_ROOT_PASSWORD_FILE=/run/secrets/MYSQL_ROOT_PASSWORD
+      - MYSQL_ROOT_PASSWORD=pass
       - TZ=US/Central
-    secrets:
-      - MYSQL_ROOT_PASSWORD
 
   galera2:
     image: mariadb:10.5.5
@@ -140,10 +134,8 @@ services:
         constraints:
           - node.hostname == eve
     environment:
-      - MYSQL_ROOT_PASSWORD_FILE=/run/secrets/MYSQL_ROOT_PASSWORD
+      - MYSQL_ROOT_PASSWORD=pass
       - TZ=US/Central
-    secrets:
-      - MYSQL_ROOT_PASSWORD
 
   galera3:
     image: mariadb:10.5.5
@@ -165,7 +157,5 @@ services:
         constraints:
           - node.hostname == kerbin
     environment:
-      - MYSQL_ROOT_PASSWORD_FILE=/run/secrets/MYSQL_ROOT_PASSWORD
+      - MYSQL_ROOT_PASSWORD=pass
       - TZ=US/Central
-    secrets:
-      - MYSQL_ROOT_PASSWORD
