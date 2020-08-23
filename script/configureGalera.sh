@@ -61,23 +61,23 @@ else
 fi
 
 # Replace placeholders in the .cfg files.
-for f in /mnt/backup/MariaDB-Stack/galera1/config.d/*.template; do
+for f in /mnt/backup/MariaDB-Stack/config.d/galera1/*.template; do
 	envsubst < "$f" > "${f%.template}.cfg"
 done
 
-for f in /mnt/backup/MariaDB-Stack/galera2/config.d/*.template; do
+for f in /mnt/backup/MariaDB-Stack/config.d/galera1/*.template; do
 	envsubst < "$f" > "${f%.template}.cfg"
 done
 
-for f in /mnt/backup/MariaDB-Stack/galera3/config.d/*.template; do
+for f in /mnt/backup/MariaDB-Stack/config.d/galera1/*.template; do
 	envsubst < "$f" > "${f%.template}.cfg"
 done
 
-for f in /mnt/backup/MariaDB-Stack/proxysql1/config.d/*.template; do
+for f in /mnt/backup/MariaDB-Stack/config.d/proxysql1/*.template; do
 	envsubst < "$f" > "${f%.template}.cfg"
 done
 
-for f in /mnt/backup/MariaDB-Stack/proxysql2/config.d/*.template; do
+for f in /mnt/backup/MariaDB-Stack/config.d/proxysql2/*.template; do
 	envsubst < "$f" > "${f%.template}.cfg"
 done
 
