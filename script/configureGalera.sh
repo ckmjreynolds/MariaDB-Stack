@@ -43,7 +43,7 @@ fi
 
 # Store the MySQL root password as a docker swarm secret.
 docker secret rm MYSQL_ROOT_PASSWORD
-echo $1 |docker secret create MYSQL_ROOT_PASSWORD -
+echo $1|docker secret create MYSQL_ROOT_PASSWORD -
 export MYSQL_ROOT_PASSWORD=$1
 
 # Save each of the remaining passwords.
