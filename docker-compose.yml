@@ -40,8 +40,14 @@ services:
   proxysql1:
     image: proxysql/proxysql:2.0.13
     ports:
-      - 6032:6032
-      - 6033:6033
+      - target: 6032
+          published: 6032
+          protocol: tcp
+          mode: host
+      - target: 6033
+          published: 6033
+          protocol: tcp
+          mode: host
     volumes:
       - /var/lib/proxysql:/var/lib/proxysql
     deploy:
@@ -61,8 +67,14 @@ services:
   proxysql2:
     image: proxysql/proxysql:2.0.13
     ports:
-      - 6032:6032
-      - 6033:6033
+      - target: 6032
+          published: 6032
+          protocol: tcp
+          mode: host
+      - target: 6033
+          published: 6033
+          protocol: tcp
+          mode: host
     volumes:
       - /var/lib/proxysql:/var/lib/proxysql
     deploy:
@@ -82,7 +94,10 @@ services:
   galera1:
     image: mariadb:10.5.5
     ports:
-      - 3306:3306
+      - target: 3306
+          published: 3306
+          protocol: tcp
+          mode: host
     volumes:
       - /var/lib/mysql:/var/lib/mysql
       - /mnt/backup/MariaDB-Stack/config/galera1:/etc/mysql/conf.d
@@ -110,7 +125,10 @@ services:
   galera2:
     image: mariadb:10.5.5
     ports:
-      - 3306:3306
+      - target: 3306
+          published: 3306
+          protocol: tcp
+          mode: host
     volumes:
       - /var/lib/mysql:/var/lib/mysql
       - /mnt/backup/MariaDB-Stack/config/galera2:/etc/mysql/conf.d
@@ -138,7 +156,10 @@ services:
   galera3:
     image: mariadb:10.5.5
     ports:
-      - 3306:3306
+      - target: 3306
+          published: 3306
+          protocol: tcp
+          mode: host
     volumes:
       - /var/lib/mysql:/var/lib/mysql
       - /mnt/backup/MariaDB-Stack/config/galera3:/etc/mysql/conf.d
