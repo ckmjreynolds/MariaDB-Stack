@@ -116,7 +116,6 @@ services:
           - node.hostname == moho
     environment:
       - MYSQL_ROOT_PASSWORD_FILE=/run/secrets/MYSQL_ROOT_PASSWORD
-      - MYSQL_ROOT_HOST=%
       - TZ=US/Central
     secrets:
       - MYSQL_ROOT_PASSWORD
@@ -142,7 +141,6 @@ services:
           - node.hostname == eve
     environment:
       - MYSQL_ROOT_PASSWORD_FILE=/run/secrets/MYSQL_ROOT_PASSWORD
-      - MYSQL_ROOT_HOST=%
       - TZ=US/Central
     secrets:
       - MYSQL_ROOT_PASSWORD
@@ -168,7 +166,6 @@ services:
           - node.hostname == kerbin
     environment:
       - MYSQL_ROOT_PASSWORD_FILE=/run/secrets/MYSQL_ROOT_PASSWORD
-      - MYSQL_ROOT_HOST=%
       - TZ=US/Central
     secrets:
       - MYSQL_ROOT_PASSWORD
