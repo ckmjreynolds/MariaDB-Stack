@@ -50,7 +50,7 @@ services:
         mode: host
     volumes:
       - /var/lib/proxysql:/var/lib/proxysql
-      - /mnt/backup/MariaDB-Stack/config/proxysql/proxysql.cnf:/etc/proxysql.cnf
+      - /mnt/backup/MariaDB-Stack/config/proxysql1/proxysql.cnf:/etc/proxysql.cnf
     deploy:
       replicas: 1
       endpoint_mode: dnsrr
@@ -78,7 +78,7 @@ services:
         mode: host
     volumes:
       - /var/lib/proxysql:/var/lib/proxysql
-      - /mnt/backup/MariaDB-Stack/config/proxysql/proxysql.cnf:/etc/proxysql.cnf
+      - /mnt/backup/MariaDB-Stack/config/proxysql2/proxysql.cnf:/etc/proxysql.cnf
     deploy:
       replicas: 1
       endpoint_mode: dnsrr
