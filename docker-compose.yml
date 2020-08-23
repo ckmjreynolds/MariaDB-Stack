@@ -97,7 +97,7 @@ services:
     image: mariadb:10.5.5
     volumes:
       - /var/lib/mysql:/var/lib/mysql
-      - /mnt/backup/MariaDB-Stack/config/galera1:/etc/mysql/conf.d
+      - /mnt/backup/MariaDB-Stack/conf.d/galera1:/etc/mysql/conf.d
       - /mnt/backup/MariaDB-Stack/initdb.d:/docker-entrypoint-initdb.d
       - /mnt/backup:/mnt/backup
     deploy:
@@ -122,7 +122,7 @@ services:
     image: mariadb:10.5.5
     volumes:
       - /var/lib/mysql:/var/lib/mysql
-      - /mnt/backup/MariaDB-Stack/config/galera2:/etc/mysql/conf.d
+      - /mnt/backup/MariaDB-Stack/conf.d/galera2:/etc/mysql/conf.d
       - /mnt/backup/MariaDB-Stack/initdb.d:/docker-entrypoint-initdb.d
       - /mnt/backup:/mnt/backup
     deploy:
@@ -147,7 +147,7 @@ services:
     image: mariadb:10.5.5
     volumes:
       - /var/lib/mysql:/var/lib/mysql
-      - /mnt/backup/MariaDB-Stack/config/galera3:/etc/mysql/conf.d
+      - /mnt/backup/MariaDB-Stack/conf.d/galera3:/etc/mysql/conf.d
       - /mnt/backup/MariaDB-Stack/initdb.d:/docker-entrypoint-initdb.d
       - /mnt/backup:/mnt/backup
     deploy:
