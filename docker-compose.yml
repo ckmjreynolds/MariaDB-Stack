@@ -88,7 +88,6 @@ services:
       - /mnt/backup:/mnt/backup
     deploy:
       mode: global
-      replicas: 1
       restart_policy:
         condition: on-failure
       resources:
