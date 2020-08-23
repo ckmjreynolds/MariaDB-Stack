@@ -40,13 +40,13 @@ services:
   proxysql1:
     image: proxysql/proxysql:2.0.13
     ports:
-      - 6032
-      - 6033
+      - 6032:6032
+      - 6033:6033
     volumes:
       - /var/lib/proxysql:/var/lib/proxysql
     deploy:
       replicas: 1
-      endpoint_mode: dnsrr
+      mode: global
       restart_policy:
         condition: on-failure
       resources:
@@ -61,13 +61,13 @@ services:
   proxysql2:
     image: proxysql/proxysql:2.0.13
     ports:
-      - 6032
-      - 6033
+      - 6032:6032
+      - 6033:6033
     volumes:
       - /var/lib/proxysql:/var/lib/proxysql
     deploy:
       replicas: 1
-      endpoint_mode: dnsrr
+      mode: global
       restart_policy:
         condition: on-failure
       resources:
@@ -82,15 +82,15 @@ services:
   galera1:
     image: mariadb:10.5.5
     ports:
-      - 3306
+      - 3306:3306
     volumes:
       - /var/lib/mysql:/var/lib/mysql
       - /mnt/backup/MariaDB-Stack/config/galera1:/etc/mysql/conf.d
       - /mnt/backup/MariaDB-Stack/initdb.d:/docker-entrypoint-initdb.d
       - /mnt/backup:/mnt/backup
     deploy:
+      mode: global
       replicas: 1
-      endpoint_mode: dnsrr
       restart_policy:
         condition: on-failure
       resources:
@@ -110,15 +110,15 @@ services:
   galera2:
     image: mariadb:10.5.5
     ports:
-      - 3306
+      - 3306:3306
     volumes:
       - /var/lib/mysql:/var/lib/mysql
       - /mnt/backup/MariaDB-Stack/config/galera2:/etc/mysql/conf.d
       - /mnt/backup/MariaDB-Stack/initdb.d:/docker-entrypoint-initdb.d
       - /mnt/backup:/mnt/backup
     deploy:
+      mode: global
       replicas: 1
-      endpoint_mode: dnsrr
       restart_policy:
         condition: on-failure
       resources:
@@ -138,15 +138,15 @@ services:
   galera3:
     image: mariadb:10.5.5
     ports:
-      - 3306
+      - 3306:3306
     volumes:
       - /var/lib/mysql:/var/lib/mysql
       - /mnt/backup/MariaDB-Stack/config/galera3:/etc/mysql/conf.d
       - /mnt/backup/MariaDB-Stack/initdb.d:/docker-entrypoint-initdb.d
       - /mnt/backup:/mnt/backup
     deploy:
+      mode: global
       replicas: 1
-      endpoint_mode: dnsrr
       restart_policy:
         condition: on-failure
       resources:
