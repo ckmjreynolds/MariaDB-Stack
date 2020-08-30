@@ -1,48 +1,35 @@
 # MariaDB-Stack
-A simplified, reference implementation of a database stack, deployed using a Docker Swarm consisting of a three node MariaDB Galera cluster, using ProxySQL to provide load balancing, and PMM to provide monitoring.
+A simplified, reference implementation of a database stack consisting of a three-node Galera cluster running MariaDB, two ProxySQL instances to provide load balancing, and PMM to provide monitoring.
 
 ## Example Deployment (AWS)
 ```mermaid
 graph TD
-    mohoPS -.-> kerbinDB
-    evePS -.-> kerbinDB
+    proxysql1[\ProxySQL1 - moho/]
+    proxysql2[\ProxySQL2 - eve/]
 
-    subgraph eve - Leg 2
-        evePS[\ProxySQL2/]
-        eveDB[Galera2]
+    galera1[Galera1 - moho]
+    galera2[Galera2 - eve]
+    galera3[Galera3 - kerbin]
 
-        evePS --> eveDB
-    end
-    subgraph kerbin - Backup
-        kerbinDB[Galera3]
-    end
-    subgraph moho - Leg 1
-        mohoPS[\ProxySQL1/]
-        mohoDB[Galera1]
-
-        mohoPS --> mohoDB
-    end
+    proxysql1 -->|Read|galera1
+    proxysql1 -.->|Write|galera3
+    proxysql2 -.->|Write|galera3
+    proxysql2 -->|Read|galera2
 ```
-The example deployment utilizes three AWS EC2 instances running the Ubuntu distribution. The sample configuration is as small as possible and not practical for most production loads.
+The example deployment utilizes three AWS EC2 instances running the Ubuntu distribution. The sample configuration is as small as possible and not practical for production loads.
 
 ### Instances
 | Hostname | Instance Type    | Availability Zone | Operating System      | Description               |
 | :------- | :--------------- | :---------------- |:--------------------- | :-------------------------|
-| `moho`   | `t3a.small 2GB`  | `us-east-1a`      | `Ubuntu 20.04.01 LTS` | `galera1` and `proxysql1` |
-| `eve`    | `t3a.small 2GB`  | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | `galera2` and `proxysql2` |
-| `kerbin` | `t3a.medium 4GB` | `us-east-1c`      | `Ubuntu 20.04.01 LTS` | `galera3` and `pmm`       |
+| `moho`   | `t3a.small 2GB`  | `us-east-1a`      | `Ubuntu 20.04.01 LTS` | `MariaDB` and `ProxySQL`  |
+| `eve`    | `t3a.small 2GB`  | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | `MariaDB` and `ProxySQL`  |
+| `kerbin` | `t3a.medium 4GB` | `us-east-1c`      | `Ubuntu 20.04.01 LTS` | `MariaDB` and `PMM`       |
 
-## 1. Setup Swarms
+## 1. Setup Nodes
 ### 1.1 Create the Security Group
 | Port/Protocol | Source               | Description                   |
 | ------------: | :------------------- | :---------------------------- |
 | `22/TCP`      | `XXX.XXX.XXX.XXX/32` | SSH for Administration        |
-| `6033/TCP`    | `XXX.XXX.XXX.XXX/32` | ProxySQL Traffic              |
-| `2377/TCP`    | `172.31.0.0/16`      | Docker Swarm                  |
-| `7946/TCP`    | `172.31.0.0/16`      | Docker Swarm                  |
-| `7946/UDP`    | `172.31.0.0/16`      | Docker Swarm                  |
-| `4789/UDP`    | `172.31.0.0/16`      | Docker Swarm                  |
-| `2049/TCP`    | `172.31.0.0/16`      | NFS for EFS                   |
 
 ### 1.2 Create the EFS Volume
 Create a `General Pupose` EFS volume for the `backup` volume.
@@ -91,7 +78,7 @@ Create a `General Pupose` EFS volume for the `backup` volume.
 | Hostname    | Device           | Size | Description         |
 | :---------- | :--------------- | ---: |:------------------- |
 | `all`       | `/dev/nvme0n1p1` | 8GB  | `/`                 |
-| `all`       | `/dev/nvme1n1`   | 1GB  | `/var/lib/mysql`    |
+| `all`       | `/dev/nvme1n1`   | 10GB | `/var/lib/mysql`    |
 | `moho/eve`  | `/dev/nvme2n1`   | 1GB  | `/var/lib/proxysql` |
 | `kerbin`    | `/dev/nvme2n1`   | 10GB | `/srv`              |
 
