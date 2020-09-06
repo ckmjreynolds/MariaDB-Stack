@@ -179,9 +179,10 @@ sudo shutdown
 Repeat the following step using the new AMI to create the remaining nodes.
 - [1.5 Create the Instance](#15-create-the-moho-instance)
 
-### 1.14 Configure Galera on `moho`
+### 1.14 Configure and Bootstrap Galera on `moho`
 ```bash
-configureNode.sh moho.slug.mobi 100 1 "gcomm://moho.slug.mobi,eve.slug.mobi,duna.slug.mobi" 1, 1000, "password"
+configureNode.sh moho.slug.mobi 100 1 "gcomm://moho.slug.mobi,eve.slug.mobi,duna.slug.mobi" 1 1000 "password"
+sudo galera_new_cluster
 ```
 
 ```bash
