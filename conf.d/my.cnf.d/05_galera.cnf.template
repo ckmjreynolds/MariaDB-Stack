@@ -1,4 +1,3 @@
-#!/bin/bash
 # **************************************************************************************
 # MIT License
 #
@@ -26,32 +25,19 @@
 #
 #  Date        Author  Description
 #  ----        ------  -----------
-#  2020-09-05  CDR     Initial Version
+#  2020-09-06  CDR     Initial Version
 # **************************************************************************************
-if [ -z "$*" ]; then
-	echo "USAGE: configure.sh"
-	echo "	<FQDN> - This node's fully qualified domain name."
-	echo "	<gtid_domain_id> - The gtid_domain_id for this node (unique)."
-	echo "	<auto_increment_offset> - The auto_increment_offset for this node (unique)."
-	echp "	<wsrep_cluster_address> - The wsrep_cluster_address."
-	echo "	<server_id> - The server_id for this Galera cluster."
-	echo "	<wsrep_gtid_domain_id> - The wsrep_gtid_domain_id for this Galera cluster."
-	echo "	<mariabackup password> - The password for the mariabackup user, for SST."
-	exit 0
-fi
+[mariadb]
+binlog_format                   = ROW
+wsrep_on                        = OFF
+wsrep_provider                  = /usr/lib/galera/libgalera_smm.so
+wsrep_cluster_address           = ${WSREP_CLUSTER_ADDRESS}
+wsrep_node_address              = ${WSREP_NODE_ADDRESS}
+wsrep_sst_method                = mariabackup
+wsrep_sst_auth                  = "mariabackup:${MARIABACKUP_PASSWORD}"
+wsrep_provider_options          = ist.recv_bind=0.0.0.0;gcache.size=1GB
 
-export WSREP_NODE_ADDRESS=$1
-export GTID_DOMAIN_ID=$2
-export AUTO_INCREMENT_OFFSET=$3
-export WSREP_CLUSTER_ADDRESS=$4
-export SERVER_ID=$5
-export WSREP_GTID_DOMAIN_ID=$6
-export MARIABACKUP_PASSWORD=$7
-
-# Replace placeholders in the .cfg files.
-for f in /mnt/backup/MariaDB-Stack/conf.d/*.template; do
-	envsubst < "$f" > "${f%.template}"
-done
-
-# Copy the config files to the target location.
-sudo cp /mnt/backup/MariaDB-Stack/conf.d/*.cnf /etc/mysql/conf.d
+# Settings for replication between galera clusters.
+wsrep_gtid_domain_id            = ${WSREP_GTID_DOMAIN_ID}
+wsrep_gtid_mode                 = ON
+wsrep_auto_increment_control    = OFF

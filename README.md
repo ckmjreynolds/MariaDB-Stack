@@ -1,35 +1,37 @@
 # MariaDB-Stack
-A simplified, reference implementation of a database stack consisting of a three-node Galera cluster running MariaDB, two ProxySQL instances to provide load balancing, and PMM to provide monitoring.
+A simplified, reference implementation of a database stack consisting of two three-node Galera clusters running MariaDB, two three-node ProxySQL clusters to provide load balancing, and PMM to provide monitoring.
 
 ## Example Deployment (AWS)
 ```mermaid
 graph TD
-    proxysql1[\ProxySQL1 - moho/]
-    proxysql2[\ProxySQL2 - eve/]
+    proxysql1[\ProxySQL1/]
+    galera1[Galera Nodes]
+    proxysql1-->galera1
 
-    galera1[Galera1 - moho]
-    galera2[Galera2 - eve]
-    galera3[Galera3 - kerbin]
-
-    proxysql1 -->|Read|galera1
-    proxysql1 -.->|Write|galera3
-    proxysql2 -.->|Write|galera3
-    proxysql2 -->|Read|galera2
+    proxysql2[\ProxySQL2/]
+    galera2[Galera Nodes]
+    proxysql2-->galera2
 ```
-The example deployment utilizes three AWS EC2 instances running the Ubuntu distribution. The sample configuration is as small as possible and not practical for production loads.
+The example deployment utilizes seven AWS EC2 instances. The sample configuration is as small as possible and not practical for production loads.
 
 ### Instances
 | Hostname | Instance Type    | Availability Zone | Operating System      | Description               |
 | :------- | :--------------- | :---------------- |:--------------------- | :-------------------------|
+| `kerbin` | `t3.small 2GB`   | `us-east-1c`      | `Ubuntu 20.04.01 LTS` | PMM from AWS Marketplace  |
 | `moho`   | `t3a.small 2GB`  | `us-east-1a`      | `Ubuntu 20.04.01 LTS` | `MariaDB` and `ProxySQL`  |
-| `eve`    | `t3a.small 2GB`  | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | `MariaDB` and `ProxySQL`  |
-| `kerbin` | `t3a.medium 4GB` | `us-east-1c`      | `Ubuntu 20.04.01 LTS` | `MariaDB` and `PMM`       |
+| `eve`    | `t3a.small 2GB`  | `us-east-1a`      | `Ubuntu 20.04.01 LTS` | `MariaDB` and `ProxySQL`  |
+| `duna`   | `t3a.small 2GB`  | `us-east-1a`      | `Ubuntu 20.04.01 LTS` | `MariaDB` and `ProxySQL`  |
+| `dres`   | `t3a.small 2GB`  | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | `MariaDB` and `ProxySQL`  |
+| `jool`   | `t3a.small 2GB`  | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | `MariaDB` and `ProxySQL`  |
+| `eeloo`  | `t3a.small 2GB`  | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | `MariaDB` and `ProxySQL`  |
 
 ## 1. Setup Nodes
 ### 1.1 Create the Security Group
 | Port/Protocol | Source               | Description                   |
 | ------------: | :------------------- | :---------------------------- |
 | `22/TCP`      | `XXX.XXX.XXX.XXX/32` | SSH for Administration        |
+| `433/TCP`     | `XXX.XXX.XXX.XXX/32` | HTTPS for Administration      |
+
 
 ### 1.2 Create the EFS Volume
 Create a `General Pupose` EFS volume for the `backup` volume.
@@ -69,7 +71,10 @@ Create a `General Pupose` EFS volume for the `backup` volume.
 }
 ```
 
-### 1.4 Create the `moho` Instance
+### 1.4 Setup PMM
+Follow the instructions [here](https://www.percona.com/doc/percona-monitoring-and-management/2.x/install/aws.html) to setup PMM using the AWS Marketplace.
+
+### 1.5 Create the `moho` Instance
 - "T2/T3 Unlimited": disabled
 - "Add file system": `backup` created above as `/mnt/backup`
 - "Add storage": based on the table below:
@@ -79,10 +84,9 @@ Create a `General Pupose` EFS volume for the `backup` volume.
 | :---------- | :--------------- | ---: |:------------------- |
 | `all`       | `/dev/nvme0n1p1` | 8GB  | `/`                 |
 | `all`       | `/dev/nvme1n1`   | 10GB | `/var/lib/mysql`    |
-| `moho/eve`  | `/dev/nvme2n1`   | 1GB  | `/var/lib/proxysql` |
-| `kerbin`    | `/dev/nvme2n1`   | 10GB | `/srv`              |
+| `all`       | `/dev/nvme2n1`   | 1GB  | `/var/lib/proxysql` |
 
-### 1.5 Clone `git` Repository
+### 1.6 Clone `git` Repository
 ```bash
 sudo chown -R ubuntu:ubuntu /mnt/backup
 git clone --single-branch --branch 0.1.4 https://github.com/ckmjreynolds/MariaDB-Stack.git
@@ -91,7 +95,7 @@ git clone --single-branch --branch 0.1.4 https://github.com/ckmjreynolds/MariaDB
 export PATH="$PATH:/mnt/backup/MariaDB-Stack/script"
 ```
 
-### 1.6 Setup Route 53 Registration
+### 1.7 Setup Route 53 Registration
 ```bash
 # Install packages.
 sudo apt-get update
@@ -113,79 +117,65 @@ crontab -e
 sudo reboot
 ```
 
-### 1.7 Install Docker
-#### Install Packages
+### 1.8 Format and Mount Drives
 ```bash
+# Format the EBS drives.
+sudo mkfs --type=ext4 /dev/nvme1n1
+sudo mkfs --type=ext4 /dev/nvme2n1
+
+# Create the directories to mount to.
+sudo mkdir /var/lib/mysql
+sudo mkdir /var/lib/proxysql
+
+# Mount the EBS drives.
+sudo mount /dev/nvme1n1 /var/lib/mysql
+sudo mount /dev/nvme2n1 /var/lib/proxysql
+```
+
+### 1.9 Install MariaDB
+#### Setup Repository and Install
+```bash
+curl -LsS https://downloads.mariadb.com/MariaDB/mariadb_repo_setup | sudo bash -s -- --skip-maxscale --skip-tools
+sudo apt-get install mariadb-server galera-4 mariadb-client libmariadb3 mariadb-backup mariadb-common
+sudo mysql_secure_installation
+
+# Stop and disable MariaDB for now.
+sudo systemctl stop mariadb
+sudo systemctl disable mariadb
+```
+
+### 1.10 Install ProxySQL
+#### Setup Repository and Install
+```bash
+# https://www.percona.com/doc/percona-server/LATEST/installation/apt_repo.html
+wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
+sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
 sudo apt-get update
-sudo apt-get install docker.io
+sudo apt-get install proxysql2
+
+# Disable ProxySQL for now.
+sudo systemctl disable proxysql
 ```
 
-#### Configure Docker
+### 1.11 Install PMM Client
 ```bash
-sudo usermod -aG docker $USER
-
-# Log out and log back in.
-docker run hello-world
-docker rm -f $(docker ps -aq)
-docker rmi hello-world:latest
-```
-
-### 1.8 Install `pmm-client`
-```bash
-# Setup repository
-wget https://repo.percona.com/apt/percona-release_latest.generic_all.deb
-sudo dpkg -i percona-release_latest.generic_all.deb
-rm percona-release_latest.generic_all.deb
-
-# Install the client
+# https://www.percona.com/doc/percona-server/LATEST/installation/apt_repo.html
 sudo apt-get update
 sudo apt-get install pmm2-client
 ```
 
-### 1.9 Patch and Create AMI
+### 1.12 Patch and Create AMI
 ```bash
 sudo apt-get update
 sudo apt-get upgrade
 sudo shutdown
+
 # Create AMI in EC2 Managment Console
 ```
 
-### 1.10 Create Remaining Nodes
+### 1.13 Create Remaining Nodes
 Repeat the following step using the new AMI to create the remaining nodes.
-- [1.4 Create the Instance](#14-create-the-moho-instance)
-
-### 1.11 Setup Docker Swarm
-Setup the Docker swarm.
-```bash
-# On moho
-docker swarm init
-docker swarm join-token manager
-
-# On remaining nodes, join as a worker or manager.
-docker swarm join --token <token> <ip>:2377
-```
-
-### 1.12 Format and Mount Drives
-```bash
-# NAME        MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
-# nvme1n1     259:0    0    1G  0 disk 
-# nvme2n1     259:1    0    1G  0 disk
-# NOTE: nvme2n1 is 10G on kerbin
-sudo mkfs --type=ext4 /dev/nvme1n1
-sudo mkfs --type=ext4 /dev/nvme2n1
-
-# moho, eve, and kerbin
-sudo mkdir /var/lib/mysql
-sudo mount /dev/nvme1n1 /var/lib/mysql
-
-# moho and eve
-sudo mkdir /var/lib/proxysql
-sudo mount /dev/nvme2n1 /var/lib/proxysql
-
-# kerbin
-sudo mkdir /var/lib/pmm
-sudo mount /dev/nvme2n1 /var/lib/pmm
-```
+- [1.5 Create the Instance](#15-create-the-moho-instance)
 
 ```bash
 cd /mnt/backup

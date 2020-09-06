@@ -25,7 +25,12 @@
 #
 #  Date        Author  Description
 #  ----        ------  -----------
-#  2020-08-23  CDR     Initial Version
+#  2020-09-05  CDR     Initial Version
 # **************************************************************************************
 [mariadb]
-max_allowed_packet = 16777216
+max_allowed_packet  = 16777216
+log_error           = mysql.err
+
+# Makes MariaDB work like a traditional SQL server. Same as: STRICT_TRANS_TABLES, STRICT_ALL_TABLES,
+# NO_ZERO_IN_DATE, NO_ZERO_DATE, ERROR_FOR_DIVISION_BY_ZERO, TRADITIONAL, NO_AUTO_CREATE_USER.
+sql_mode            = TRADITIONAL

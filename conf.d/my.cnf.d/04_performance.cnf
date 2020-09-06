@@ -1,4 +1,3 @@
-#!/bin/bash
 # **************************************************************************************
 # MIT License
 #
@@ -28,30 +27,20 @@
 #  ----        ------  -----------
 #  2020-09-05  CDR     Initial Version
 # **************************************************************************************
-if [ -z "$*" ]; then
-	echo "USAGE: configure.sh"
-	echo "	<FQDN> - This node's fully qualified domain name."
-	echo "	<gtid_domain_id> - The gtid_domain_id for this node (unique)."
-	echo "	<auto_increment_offset> - The auto_increment_offset for this node (unique)."
-	echp "	<wsrep_cluster_address> - The wsrep_cluster_address."
-	echo "	<server_id> - The server_id for this Galera cluster."
-	echo "	<wsrep_gtid_domain_id> - The wsrep_gtid_domain_id for this Galera cluster."
-	echo "	<mariabackup password> - The password for the mariabackup user, for SST."
-	exit 0
-fi
+[mariadb]
+# This is the default for MariaDB 10.2+ but good to be explicit.
+default_storage_engine          = innodb
 
-export WSREP_NODE_ADDRESS=$1
-export GTID_DOMAIN_ID=$2
-export AUTO_INCREMENT_OFFSET=$3
-export WSREP_CLUSTER_ADDRESS=$4
-export SERVER_ID=$5
-export WSREP_GTID_DOMAIN_ID=$6
-export MARIABACKUP_PASSWORD=$7
+# O_DIRECT prevents double-buffering while retaining safety.
+innodb_flush_method             = O_DIRECT
 
-# Replace placeholders in the .cfg files.
-for f in /mnt/backup/MariaDB-Stack/conf.d/*.template; do
-	envsubst < "$f" > "${f%.template}"
-done
+# "We recommend setting InnoDB log buffer size to 64M."
+innodb_log_buffer_size          = 64MB
 
-# Copy the config files to the target location.
-sudo cp /mnt/backup/MariaDB-Stack/conf.d/*.cnf /etc/mysql/conf.d
+# This is the default but good to be explicit.
+innodb_file_per_table           = 1
+
+# This is the default but good to be explicit.
+# "Set to 1, along with sync_binlog=1 for the greatest level of fault tolerance."
+innodb_flush_log_at_trx_commit  = 1
+sync_binlog                     = 1

@@ -25,13 +25,12 @@
 #
 #  Date        Author  Description
 #  ----        ------  -----------
-#  2020-08-23  CDR     Initial Version
+#  2020-09-05  CDR     Initial Version
 # **************************************************************************************
+# https://www.percona.com/doc/percona-monitoring-and-management/2.x/concepts/services-mysql.html
 [mariadb]
-# The current RDS MySQL max_connections setting is default by
-# {DBInstanceClassMemory/12582880}, if you use t3.micro with 1GB RAM
-# the max_connections could be (1024*1024*1024)/12582880 ~= 85.
-max_connections         = 85
-
-# {DBInstanceClassMemory*3/4}
-innodb_buffer_pool_size = 768MB
+innodb_monitor_enable   = all
+performance_schema      = ON
+slow_log                = ON
+long_query_time         = 5
+log_output              = TABLE

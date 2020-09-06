@@ -25,9 +25,36 @@
 #
 #  Date        Author  Description
 #  ----        ------  -----------
-#  2020-08-23  CDR     Initial Version
+#  2020-09-06  CDR     Initial Version
 # **************************************************************************************
-# https://www.percona.com/doc/percona-monitoring-and-management/2.x/concepts/services-mysql.html
-[mariadb]
-innodb_monitor_enable   = all
-performance_schema      = ON
+# unique per replica Integer value used to identify the instance in a replication group
+server_id                   = ${SERVER_ID}
+gtid_domain_id              = ${GTID_DOMAIN_ID}
+
+# Location of binary and relay logs.
+log_bin                     = mysql-bin
+relay_log                   = relay-bin
+expire_logs_days            = 7
+
+# Hostname or IP of the slave to be reported to the master during slave registration.
+report_host                 = ${WSREP_NODE_ADDRESS}
+
+# ROW is safest but results in large binlogs (required for Galera).
+# MIXED is safe and results in smaller binlogs than ROW
+# STATEMENT is not safe.
+binlog_format               = ROW
+
+# A value of 10 is reasonable and has the advantage of allowing determination of the source
+# by simply looking at ID mod 10 (i.e. the ones place).
+auto_increment_increment    = 10
+
+# The offset for all AUTO_INCREMENT values on the server, by default 1. Intended for use
+# in master-to-master replication. Should be smaller than auto_increment_increment, except
+# when both variables are 1 (default setup).
+auto_increment_offset       = ${AUTO_INCREMENT_OFFSET}
+
+# Set to 1 if you want to daisy-chain the slaves.
+log_slave_updates           = ON
+
+# Attempt to recover vs. re-pull relay logs.
+relay_log_recovery          = ON
