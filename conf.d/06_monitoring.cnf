@@ -31,6 +31,6 @@
 [mariadb]
 innodb_monitor_enable   = all
 performance_schema      = ON
-slow_log                = ON
+slow_query_log          = ON
 long_query_time         = 5
 log_output              = TABLE
