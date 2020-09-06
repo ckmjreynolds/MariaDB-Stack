@@ -29,7 +29,7 @@
 # **************************************************************************************
 [mariadb]
 # This is the default for MariaDB 10.2+ but good to be explicit.
-default_storage_engine          = innodb
+default_storage_engine          = InnoDB
 
 # O_DIRECT prevents double-buffering while retaining safety.
 innodb_flush_method             = O_DIRECT
