@@ -25,10 +25,13 @@
 #
 #  Date        Author  Description
 #  ----        ------  -----------
-#  2020-09-05  CDR     Initial Version
+#  2020-09-06  CDR     Initial Version
 # **************************************************************************************
 [mariadb]
 max_allowed_packet  = 16777216
+bind-address        = 0.0.0.0
+port                = 3306
+
 log_error           = mysql.err
 
 # Makes MariaDB work like a traditional SQL server. Same as: STRICT_TRANS_TABLES, STRICT_ALL_TABLES,
