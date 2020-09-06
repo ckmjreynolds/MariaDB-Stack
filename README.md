@@ -89,6 +89,7 @@ Follow the instructions [here](https://www.percona.com/doc/percona-monitoring-an
 ### 1.6 Clone `git` Repository
 ```bash
 sudo chown -R ubuntu:ubuntu /mnt/backup
+sudo rm -rf /mnt/backup/*
 git clone --single-branch --branch 0.1.4 https://github.com/ckmjreynolds/MariaDB-Stack.git
 
 # Add to ~/.profile.

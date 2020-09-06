@@ -33,7 +33,7 @@ if [ -z "$*" ]; then
 	echo "	<FQDN> - This node's fully qualified domain name."
 	echo "	<gtid_domain_id> - The gtid_domain_id for this node (unique)."
 	echo "	<auto_increment_offset> - The auto_increment_offset for this node (unique)."
-	echp "	<wsrep_cluster_address> - The wsrep_cluster_address."
+	echo "	<wsrep_cluster_address> - The wsrep_cluster_address."
 	echo "	<server_id> - The server_id for this Galera cluster."
 	echo "	<wsrep_gtid_domain_id> - The wsrep_gtid_domain_id for this Galera cluster."
 	echo "	<mariabackup password> - The password for the mariabackup user, for SST."
