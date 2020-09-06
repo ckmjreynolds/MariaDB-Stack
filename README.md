@@ -204,8 +204,6 @@ MariaDB [(none)]> exit
 ### 1.16 Add Monitoring
 ```bash
 sudo pmm-admin config --server-insecure-tls --server-url=https://admin:<password>@kerbin.slug.mobi:443
-sudo pmm-admin config --server-insecure-tls --server-url=https://admin:n5%404dT69%21Y%268zkgb@kerbin.slug.mobi:443
-
 pmm-admin add mysql --username=pmm --password=password --query-source=perfschema moho.slug.mobi:3306
 ```
 
@@ -221,7 +219,72 @@ sudo pmm-admin config --server-insecure-tls --server-url=https://admin:<password
 pmm-admin add mysql --username=pmm --password=password --query-source=perfschema eve.slug.mobi:3306
 ```
 
+### 1.18 Configure and Start Galera on `duna`
 ```bash
+configureNode.sh duna.slug.mobi 300 3 "gcomm://moho.slug.mobi,eve.slug.mobi,duna.slug.mobi" 1 1000 "password"
+
+# Simply start the other nodes.
+sudo systemctl enable mariadb
+sudo systemctl start mariadb
+
+sudo pmm-admin config --server-insecure-tls --server-url=https://admin:<password>@kerbin.slug.mobi:443
+pmm-admin add mysql --username=pmm --password=password --query-source=perfschema duna.slug.mobi:3306
+```
+
+### 1.19 Backup and Restore `moho` to `dres`
+```bash
+# Moho
+sudo mariabackup --backup --target-dir=/mnt/backup/moho --user=mariabackup --password=password
+sudo mariabackup --prepare --target-dir=/mnt/backup/moho
+
+# Dres
+sudo rm -rf /var/lib/mysql/*
+sudo mariabackup --copy-back --target-dir=/mnt/backup/moho
+sudo chown -R mysql:mysql /var/lib/mysql/
+```
+
+### 1.20 Configure and Bootstrap Galera on `dres`
+```bash
+configureNode.sh dres.slug.mobi 400 4 "gcomm://dres.slug.mobi,jool.slug.mobi,eeloo.slug.mobi" 2 2000 "password"
+
+# Bootstrap the first node on each cluster only.
+sudo systemctl enable mariadb
+sudo galera_new_cluster
+```
+
+### 1.21 Add Monitoring
+```bash
+sudo pmm-admin config --server-insecure-tls --server-url=https://admin:<password>@kerbin.slug.mobi:443
+pmm-admin add mysql --username=pmm --password=password --query-source=perfschema dres.slug.mobi:3306
+```
+
+### 1.22 Configure and Start Galera on `jool`
+```bash
+configureNode.sh jool.slug.mobi 500 5 "gcomm://dres.slug.mobi,jool.slug.mobi,eeloo.slug.mobi" 2 2000 "password"
+
+# Simply start the other nodes.
+sudo systemctl enable mariadb
+sudo systemctl start mariadb
+
+sudo pmm-admin config --server-insecure-tls --server-url=https://admin:<password>@kerbin.slug.mobi:443
+pmm-admin add mysql --username=pmm --password=password --query-source=perfschema jool.slug.mobi:3306
+```
+
+### 1.23 Configure and Start Galera on `eeloo`
+```bash
+configureNode.sh eeloo.slug.mobi 600 6 "gcomm://dres.slug.mobi,jool.slug.mobi,eeloo.slug.mobi" 2 2000 "password"
+
+# Simply start the other nodes.
+sudo systemctl enable mariadb
+sudo systemctl start mariadb
+
+sudo pmm-admin config --server-insecure-tls --server-url=https://admin:<password>@kerbin.slug.mobi:443
+pmm-admin add mysql --username=pmm --password=password --query-source=perfschema eeloo.slug.mobi:3306
+```
+
+```bash
+configureNode.sh duna.slug.mobi 300 3 "gcomm://moho.slug.mobi,eve.slug.mobi,duna.slug.mobi" 1 1000 "password"
+
 cd /mnt/backup
 docker stack rm galera
 sleep 5

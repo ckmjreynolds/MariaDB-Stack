@@ -55,3 +55,7 @@ done
 
 # Copy the config files to the target location.
 sudo cp /mnt/backup/MariaDB-Stack/conf.d/*.cnf /etc/mysql/conf.d
+
+# Comment out these lines as we override them.
+sudo sed -i.bak 's/^\(bind.*\)/#\1/g' /etc/mysql/mariadb.conf.d/50-server.cnf
+sudo sed -i.bak 's/^\(expire.*\)/#\1/g' /etc/mysql/mariadb.conf.d/50-server.cnf
