@@ -1,3 +1,4 @@
+#!/bin/bash
 # **************************************************************************************
 # MIT License
 #
@@ -27,14 +28,19 @@
 #  ----        ------  -----------
 #  2020-09-06  CDR     Initial Version
 # **************************************************************************************
--- Create a mariabackup account (used for SST).
-CREATE USER 'mariabackup'@'localhost' IDENTIFIED BY '${MARIABACKUP_PASSWORD}';
-GRANT RELOAD, PROCESS, LOCK TABLES, REPLICATION CLIENT ON *.* TO 'mariabackup'@'localhost';
+if [ -z "$*" ]; then
+	echo "USAGE: configureUsers.sh"
+	echo "	<mariabackup password> - The password for the mariabackup user, for SST."
+	echo "	<pmm password> - The password for the pmm user, for monitoring."
+	echo "	<proxysql password> - The password for the proxysql user, for monitoring."
+	exit 0
+fi
 
--- Create a pmm account (used to monitor the health of the nodes).
-CREATE USER 'pmm'@'localhost' IDENTIFIED BY '${PMM_PASSWORD}' WITH MAX_USER_CONNECTIONS 10;
-GRANT SELECT, PROCESS, SUPER, REPLICATION CLIENT, RELOAD ON *.* TO 'pmm'@'localhost';
+export MARIABACKUP_PASSWORD=$1
+export PMM_PASSWORD=$2
+export PROXYSQL_PASSWORD=$3
 
--- Create a proxysql account (used to monitor the health of the nodes).
-CREATE USER 'proxysql'@'%' IDENTIFIED BY '${PROXYSQL_PASSWORD}';
-GRANT USAGE, REPLICATION CLIENT ON *.* TO 'proxysql'@'%';
+# Replace placeholders in the .sql files.
+for f in /mnt/backup/MariaDB-Stack/initdb.d/*.template; do
+	envsubst < "$f" > "${f%.template}"
+done

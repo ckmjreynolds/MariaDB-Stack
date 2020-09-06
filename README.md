@@ -190,6 +190,11 @@ configureNode.sh moho.slug.mobi 100 1 "gcomm://moho.slug.mobi,eve.slug.mobi,duna
 sudo galera_new_cluster
 ```
 
+### 1.15 Create the DB Users
+```bash
+
+```
+
 ```bash
 cd /mnt/backup
 docker stack rm galera

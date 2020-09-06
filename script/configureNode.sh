@@ -29,7 +29,7 @@
 #  2020-09-05  CDR     Initial Version
 # **************************************************************************************
 if [ -z "$*" ]; then
-	echo "USAGE: configure.sh"
+	echo "USAGE: configureNode.sh"
 	echo "	<FQDN> - This node's fully qualified domain name."
 	echo "	<gtid_domain_id> - The gtid_domain_id for this node (unique)."
 	echo "	<auto_increment_offset> - The auto_increment_offset for this node (unique)."
