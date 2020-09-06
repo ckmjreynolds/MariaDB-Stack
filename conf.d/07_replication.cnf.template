@@ -27,6 +27,7 @@
 #  ----        ------  -----------
 #  2020-09-06  CDR     Initial Version
 # **************************************************************************************
+[mariadb]
 # unique per replica Integer value used to identify the instance in a replication group
 server_id                   = ${SERVER_ID}
 gtid_domain_id              = ${GTID_DOMAIN_ID}

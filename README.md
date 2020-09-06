@@ -132,6 +132,11 @@ sudo mkdir /var/lib/proxysql
 # Mount the EBS drives.
 sudo mount /dev/nvme1n1 /var/lib/mysql
 sudo mount /dev/nvme2n1 /var/lib/proxysql
+
+# Edit /etc/fstab
+# <device>                                      <dir>                   <type> <options> <dump> <fsck>
+UUID=136d9046-6f47-4cb4-a4b0-e671c06cc2ce       /var/lib/mysql          ext4   defaults  0      2
+UUID=b680e94c-ab74-4afe-92d6-1f538466304b       /var/lib/proxysql       ext4   defaults  0      2
 ```
 
 ### 1.9 Install MariaDB
