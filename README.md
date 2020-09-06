@@ -187,12 +187,38 @@ Repeat the following step using the new AMI to create the remaining nodes.
 ### 1.14 Configure and Bootstrap Galera on `moho`
 ```bash
 configureNode.sh moho.slug.mobi 100 1 "gcomm://moho.slug.mobi,eve.slug.mobi,duna.slug.mobi" 1 1000 "password"
+
+# Bootstrap the first node on each cluster only.
+sudo systemctl enable mariadb
 sudo galera_new_cluster
 ```
 
 ### 1.15 Create the DB Users
 ```bash
+configureUsers.sh password password password
+sudo mysql
+MariaDB [(none)]> SOURCE MariaDB-Stack/initdb.d/001_CREATE_USERS.sql
+MariaDB [(none)]> exit
+```
 
+### 1.16 Add Monitoring
+```bash
+sudo pmm-admin config --server-insecure-tls --server-url=https://admin:<password>@kerbin.slug.mobi:443
+sudo pmm-admin config --server-insecure-tls --server-url=https://admin:n5%404dT69%21Y%268zkgb@kerbin.slug.mobi:443
+
+pmm-admin add mysql --username=pmm --password=password --query-source=perfschema moho.slug.mobi:3306
+```
+
+### 1.17 Configure and Start Galera on `eve`
+```bash
+configureNode.sh eve.slug.mobi 200 2 "gcomm://moho.slug.mobi,eve.slug.mobi,duna.slug.mobi" 1 1000 "password"
+
+# Simply start the other nodes.
+sudo systemctl enable mariadb
+sudo systemctl start mariadb
+
+sudo pmm-admin config --server-insecure-tls --server-url=https://admin:<password>@kerbin.slug.mobi:443
+pmm-admin add mysql --username=pmm --password=password --query-source=perfschema eve.slug.mobi:3306
 ```
 
 ```bash

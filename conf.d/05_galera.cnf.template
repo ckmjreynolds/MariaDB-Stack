@@ -35,7 +35,7 @@ wsrep_cluster_address           = ${WSREP_CLUSTER_ADDRESS}
 wsrep_node_address              = ${WSREP_NODE_ADDRESS}
 wsrep_sst_method                = mariabackup
 wsrep_sst_auth                  = "mariabackup:${MARIABACKUP_PASSWORD}"
-wsrep_provider_options          = ist.recv_bind=0.0.0.0;gcache.size=1GB
+wsrep_provider_options          = ist.recv_bind=0.0.0.0;gcache.size=1G
 
 # Settings for replication between galera clusters.
 wsrep_gtid_domain_id            = ${WSREP_GTID_DOMAIN_ID}
