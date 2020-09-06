@@ -282,6 +282,46 @@ sudo pmm-admin config --server-insecure-tls --server-url=https://admin:<password
 pmm-admin add mysql --username=pmm --password=password --query-source=perfschema eeloo.slug.mobi:3306
 ```
 
+### 1.24 Start Replication on the `dres` node.
+```bash
+sudo cat /mnt/backup/moho/xtrabackup_binlog_info
+    mysql-bin.000012	342	100-1-8
+```
+```sql
+SET GLOBAL gtid_slave_pos = "100-1-8";
+CHANGE MASTER TO 
+   MASTER_HOST="moho.slug.mobi", 
+   MASTER_PORT=3306, 
+   MASTER_USER="repl",  
+   MASTER_PASSWORD="password", 
+   MASTER_USE_GTID=slave_pos;
+START SLAVE;
+```
+
+### 1.25 Start Replication on the `moho` node.
+```sql
+-- Execute on dres
+SHOW GLOBAL VARIABLES LIKE 'gtid_current_pos';
++------------------+---------+
+| Variable_name    | Value   |
++------------------+---------+
+| gtid_current_pos | 100-1-8 |
++------------------+---------+
+```
+```sql
+-- Execute on moho
+ET GLOBAL gtid_slave_pos = "100-1-8";
+CHANGE MASTER TO 
+   MASTER_HOST="dres.slug.mobi", 
+   MASTER_PORT=3306, 
+   MASTER_USER="repl",  
+   MASTER_PASSWORD="password", 
+   MASTER_USE_GTID=slave_pos;
+START SLAVE;
+```
+
+# TODO - ProxySQL clusters.
+
 ```bash
 configureNode.sh duna.slug.mobi 300 3 "gcomm://moho.slug.mobi,eve.slug.mobi,duna.slug.mobi" 1 1000 "password"
 
@@ -297,6 +337,6 @@ sleep 15
 clear
 mysql.sh -h 127.0.0.1 -u root -ppass
 SOURCE /mnt/backup/MariaDB-Stack/initdb.d/001_CREATE_USERS.sql
-mysql.sh -h 127.0.0.1 -P6033 -u root -ppass -e "select variable_name, variable_value from information_schema.global_status where variable_name in ('wsrep_cluster_size', 'wsrep_local_state_comment', 'wsrep_cluster_status', 'wsrep_incoming_addresses');"
+sudo mysql -e "select variable_name, variable_value from information_schema.global_status where variable_name in ('wsrep_cluster_size', 'wsrep_local_state_comment', 'wsrep_cluster_status', 'wsrep_incoming_addresses');"
 mysql -h 127.0.0.1 -P6032 -u radmin -ppass -e "select hostgroup_id,hostname,status from runtime_mysql_servers;"
 ```
