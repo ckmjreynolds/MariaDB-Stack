@@ -89,6 +89,7 @@ Follow the instructions [here](https://www.percona.com/doc/percona-monitoring-an
 ### 1.6 Clone `git` Repository
 ```bash
 sudo chown -R ubuntu:ubuntu /mnt/backup
+cd /mnt/backup
 sudo rm -rf /mnt/backup/*
 git clone --single-branch --branch 0.1.4 https://github.com/ckmjreynolds/MariaDB-Stack.git
 
@@ -177,6 +178,11 @@ sudo shutdown
 ### 1.13 Create Remaining Nodes
 Repeat the following step using the new AMI to create the remaining nodes.
 - [1.5 Create the Instance](#15-create-the-moho-instance)
+
+### 1.14 Configure Galera on `moho`
+```bash
+configureNode.sh moho.slug.mobi 100 1 "gcomm://moho.slug.mobi,eve.slug.mobi,duna.slug.mobi" 1, 1000, "password"
+```
 
 ```bash
 cd /mnt/backup
