@@ -38,3 +38,7 @@ GRANT SELECT, PROCESS, SUPER, REPLICATION CLIENT, RELOAD ON *.* TO 'pmm'@'localh
 -- Create a proxysql account (used to monitor the health of the nodes).
 CREATE USER 'proxysql'@'%' IDENTIFIED BY '${PROXYSQL_PASSWORD}';
 GRANT USAGE, REPLICATION CLIENT ON *.* TO 'proxysql'@'%';
+
+-- Create a replication user.
+CREATE USER 'repl'@'%' IDENTIFIED BY '${REPL_PASSWORD}';
+GRANT REPLICATION SLAVE ON *.*  TO 'repl'@'%';

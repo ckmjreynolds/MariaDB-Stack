@@ -33,12 +33,14 @@ if [ -z "$*" ]; then
 	echo "	<mariabackup password> - The password for the mariabackup user, for SST."
 	echo "	<pmm password> - The password for the pmm user, for monitoring."
 	echo "	<proxysql password> - The password for the proxysql user, for monitoring."
+	echo "	<repl password> - The password for the repl user, for replication."
 	exit 0
 fi
 
 export MARIABACKUP_PASSWORD=$1
 export PMM_PASSWORD=$2
 export PROXYSQL_PASSWORD=$3
+export REPL_PASSWORD=$4
 
 # Replace placeholders in the .sql files.
 for f in /mnt/backup/MariaDB-Stack/initdb.d/*.template; do
