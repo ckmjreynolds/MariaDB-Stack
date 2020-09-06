@@ -29,7 +29,7 @@
 # **************************************************************************************
 [mariadb]
 binlog_format                   = ROW
-wsrep_on                        = OFF
+wsrep_on                        = ON
 wsrep_provider                  = /usr/lib/galera/libgalera_smm.so
 wsrep_cluster_address           = ${WSREP_CLUSTER_ADDRESS}
 wsrep_node_address              = ${WSREP_NODE_ADDRESS}
