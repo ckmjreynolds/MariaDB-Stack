@@ -5,14 +5,11 @@ A simplified, reference implementation of a database stack consisting of a three
 The example deployment utilizes six AWS EC2 instances. The sample configuration is as small as possible and not practical for production loads.
 
 ### Instances
-| Hostname    | Instance Type    | Availability Zone | Operating System      | Description               |
-| :---------- | :--------------- | :---------------- |:--------------------- | :-------------------------|
-| `monitor`   | `t3a.small 2GB`  | `us-east-1c`      | `Ubuntu 20.04.01 LTS` | PMM inside Docker         |
-| `proxysql1` | `t3a.nano 512MB` | `us-east-1a`      | `Ubuntu 20.04.01 LTS` | `ProxySQL`                |
-| `proxysql2` | `t3a.nano 512MB` | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | `ProxySQL`                |
-| `galera1`   | `t4g.micro`      | `us-east-1a`      | `Ubuntu 20.04.01 LTS` | `MariaDB Galera` Node 1   |
-| `galera2`   | `t4g.micro`      | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | `MariaDB Galera` Node 2   |
-| `galera3`   | `t4g.micro`      | `us-east-1c`      | `Ubuntu 20.04.01 LTS` | `MariaDB Galera` Node 3   |
+| Hostname | Instance Type  | Availability Zone | Operating System      | Description                     |
+| :--------| :------------- | :---------------- |:--------------------- | :------------------------------ |
+| `moho`   | `t3.micro 1GB` | `us-east-1a`      | `Ubuntu 20.04.01 LTS` | `MariaDB Galera` and `ProxySQL` |
+| `eve`    | `t3.micro 1GB` | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | `MariaDB Galera` and `ProxySQL` |
+| `kerbin` | `t3.small 2GB` | `us-east-1c`      | `Ubuntu 20.04.01 LTS` | `MariaDB Galera` and `PMM`      |
 
 ## 1. Setup Network
 ### Create Default VPC
@@ -23,35 +20,12 @@ aws ec2 create-default-vpc
 aws ec2 create-tags --resources $(aws ec2 describe-vpcs --filters "Name=isDefault,Values=true"|jq -r '.Vpcs[].VpcId') --tags "Key=Name,Value=default"
 ```
 
-### Create Monitor Security Group
-```bash
-aws ec2 create-security-group --group-name monitor-sg --description "Monitor Security Group" --tag-specifications "ResourceType=security-group,Tags={Key=Name,Value=monitor-sg}"
-
-aws ec2 authorize-security-group-ingress --group-name monitor-sg \
-    --ip-permissions IpProtocol=tcp,FromPort=443,ToPort=443,IpRanges='[{CidrIp=172.31.0.0/16,Description="HTTPS for Monitoring."}]'
-
-aws ec2 authorize-security-group-ingress --group-name monitor-sg \
-    --ip-permissions IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges='[{CidrIp='$(dig +short myip.opendns.com @resolver1.opendns.com)'/32,Description="SSH for Administration."}]'
-
-aws ec2 authorize-security-group-ingress --group-name monitor-sg \
-    --ip-permissions IpProtocol=tcp,FromPort=443,ToPort=443,IpRanges='[{CidrIp='$(dig +short myip.opendns.com @resolver1.opendns.com)'/32,Description="HTTPS for Monitoring."}]'
-```
-
-### Create Database Security Group
+### Create Security Group
 ```bash
 aws ec2 create-security-group --group-name database-sg --description "Database Security Group" --tag-specifications "ResourceType=security-group,Tags={Key=Name,Value=database-sg}"
 
 aws ec2 authorize-security-group-ingress --group-name database-sg \
-    --ip-permissions IpProtocol=tcp,FromPort=6033,ToPort=6033,IpRanges='[{CidrIp=172.31.0.0/16,Description="ProxySQL SQL traffic from VPC."}]'
-
-aws ec2 authorize-security-group-ingress --group-name database-sg \
     --ip-permissions IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges='[{CidrIp='$(dig +short myip.opendns.com @resolver1.opendns.com)'/32,Description="SSH for Administration."}]'
-
-aws ec2 authorize-security-group-ingress --group-name database-sg \
-    --ip-permissions IpProtocol=tcp,FromPort=6032,ToPort=6032,IpRanges='[{CidrIp='$(dig +short myip.opendns.com @resolver1.opendns.com)'/32,Description="ProxySQL for Administration."}]'
-
-aws ec2 authorize-security-group-ingress --group-name database-sg \
-    --ip-permissions IpProtocol=tcp,FromPort=6033,ToPort=6033,IpRanges='[{CidrIp='$(dig +short myip.opendns.com @resolver1.opendns.com)'/32,Description="ProxySQL SQL traffic for Administration."}]'
 ```
 
 ## 2. Create the IAM Policy and Role `db-stack` / `db-stack-role`
@@ -60,7 +34,12 @@ aws ec2 authorize-security-group-ingress --group-name database-sg \
     "Version": "2012-10-17",
     "Statement":[
         {
-            "Action":[
+            "Effect": "Allow",
+            "Action": "ec2:Describe*",
+            "Resource": "*"
+        },
+        {
+             "Action":[
                 "route53:ChangeResourceRecordSets",
                 "route53:GetHostedZone",
                 "route53:ListResourceRecordSets"
@@ -84,19 +63,97 @@ aws ec2 authorize-security-group-ingress --group-name database-sg \
 }
 ```
 
-## 3. Create the `monitor` Instance
+## 3. Create the EC2 Instances
 ```bash
 # Ubuntu Server 20.04 LTS (HVM), SSD Volume Type - ami-0dba2cb6798deb6d8 (64-bit x86) / ami-0ea142bd244023692 (64-bit Arm)
-aws ec2 run-instances --key-name aws_chris_reynolds --instance-type t3a.small --image-id ami-0dba2cb6798deb6d8 \
-    --security-group-ids $(aws ec2 describe-security-groups --group-name monitor-sg|jq -r '.SecurityGroups[].GroupId') \
-    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1c"|jq -r '.Subnets[].SubnetId') \
-    --block-device-mappings "DeviceName=/dev/sdb,Ebs={DeleteOnTermination=true,VolumeSize=10,VolumeType=gp2}" \
+aws ec2 run-instances --key-name aws_chris_reynolds --instance-type t3.micro --image-id ami-0dba2cb6798deb6d8 \
+    --security-group-ids $(aws ec2 describe-security-groups --group-name database-sg|jq -r '.SecurityGroups[].GroupId') \
+    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1a"|jq -r '.Subnets[].SubnetId') \
+    --block-device-mappings "DeviceName=/dev/sdb,Ebs={DeleteOnTermination=true,VolumeSize=10,VolumeType=gp2}" "DeviceName=/dev/sdc,Ebs={DeleteOnTermination=true,VolumeSize=10,VolumeType=gp2}" \
     --iam-instance-profile Name="db-stack-role" \
-    --credit-specification CpuCredits="standard" \
-    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=monitor},{Key=Domain,Value=mssux.com}]"
+    --credit-specification CpuCredits="unlimited" \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=moho},{Key=Domain,Value=<domain>}]"
+
+aws ec2 run-instances --key-name aws_chris_reynolds --instance-type t3.micro --image-id ami-0dba2cb6798deb6d8 \
+    --security-group-ids $(aws ec2 describe-security-groups --group-name database-sg|jq -r '.SecurityGroups[].GroupId') \
+    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1b"|jq -r '.Subnets[].SubnetId') \
+    --block-device-mappings "DeviceName=/dev/sdb,Ebs={DeleteOnTermination=true,VolumeSize=10,VolumeType=gp2}" "DeviceName=/dev/sdc,Ebs={DeleteOnTermination=true,VolumeSize=10,VolumeType=gp2}" \
+    --iam-instance-profile Name="db-stack-role" \
+    --credit-specification CpuCredits="unlimited" \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=eve},{Key=Domain,Value=<domain>}]"
+
+aws ec2 run-instances --key-name aws_chris_reynolds --instance-type t3.small --image-id ami-0dba2cb6798deb6d8 \
+    --security-group-ids $(aws ec2 describe-security-groups --group-name database-sg|jq -r '.SecurityGroups[].GroupId') \
+    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1c"|jq -r '.Subnets[].SubnetId') \
+    --block-device-mappings "DeviceName=/dev/sdb,Ebs={DeleteOnTermination=true,VolumeSize=10,VolumeType=gp2}" "DeviceName=/dev/sdc,Ebs={DeleteOnTermination=true,VolumeSize=10,VolumeType=gp2}" \
+    --iam-instance-profile Name="db-stack-role" \
+    --credit-specification CpuCredits="unlimited" \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=kerbin},{Key=Domain,Value=<domain>}]"
 ```
 
-### 
+### 3.1 Setup Route 53 Registration
+```bash
+# Clone this git repository.
+cd ~; rm -rf ~/MariaDB-Stack; git clone --single-branch --branch 0.1.4 https://github.com/ckmjreynolds/MariaDB-Stack.git
+
+# Install packages.
+sudo apt-get update; sudo apt-get install cloud-utils ec2-api-tools
+
+# Install cli53.
+sudo cp ~/MariaDB-Stack/install/cli53-linux-$(uname -i) /usr/local/bin/cli53
+sudo chmod +x /usr/local/bin/cli53
+
+# Install registerRoute53.sh script.
+sudo cp ~/MariaDB-Stack/script/registerRoute53.sh /usr/local/bin/registerRoute53.sh
+sudo chmod +x /usr/local/bin/registerRoute53.sh
+
+# Schedule the script to run on reboot.
+(crontab -l ; echo "@reboot /usr/local/bin/registerRoute53.sh")| crontab -
+
+# Reboot the server and verify DNS entry is added/updated.
+sudo reboot
+```
+
+### 3.2 Setup Docker
+```bash
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+sudo groupadd docker
+sudo usermod -aG docker $USER
+
+# Log out and log back in.
+docker run hello-world
+docker rm -f $(docker ps -aq)
+docker rmi hello-world:latest
+rm get-docker.sh
+```
+
+### [3.3 Move Docker to ZFS](https://docs.docker.com/storage/storagedriver/zfs-driver/)
+```bash
+sudo apt install zfsutils-linux
+sudo systemctl stop docker
+sudo cp -au /var/lib/docker /var/lib/docker.bk
+sudo rm -rf /var/lib/docker
+sudo zpool create -O compression=lz4 -f zpool-docker -m /var/lib/docker /dev/nvme1n1
+sudo vi /etc/docker/daemon.json
+{
+  "storage-driver": "zfs"
+}
+sudo systemctl start docker
+```
+
+### [3.4 Setup PMM](https://www.percona.com/doc/percona-monitoring-and-management/2.x/install/docker.html)
+```bash
+# Pull the latest 2.x image
+docker pull percona/pmm-server:2
+
+# Create a persistent data container.
+docker create --volume /srv --name pmm-data percona/pmm-server:2 /bin/true
+
+# Run the image to start PMM Server.
+docker run --detach --restart always --publish 443:443 --volumes-from pmm-data \
+    --name pmm-server percona/pmm-server:2
+```
 
 ## 1. Setup Nodes
 ### 1.1 Create the Security Group
