@@ -108,7 +108,7 @@ sudo cp ~/MariaDB-Stack/script/registerRoute53.sh /usr/local/bin/registerRoute53
 sudo chmod +x /usr/local/bin/registerRoute53.sh
 
 # Schedule the script to run on reboot.
-(crontab -l ; echo "@reboot /usr/local/bin/registerRoute53.sh")| crontab -
+(cat ~/MariaDB-Stack/script/crontab)| crontab -
 
 # Reboot the server and verify DNS entry is added/updated.
 sudo reboot
@@ -118,28 +118,37 @@ sudo reboot
 ```bash
 curl -fsSL https://get.docker.com -o get-docker.sh
 sudo sh get-docker.sh
-sudo groupadd docker
 sudo usermod -aG docker $USER
-
-# Log out and log back in.
-docker run hello-world
-docker rm -f $(docker ps -aq)
-docker rmi hello-world:latest
 rm get-docker.sh
 ```
 
 ### [3.3 Move Docker to ZFS](https://docs.docker.com/storage/storagedriver/zfs-driver/)
 ```bash
-sudo apt install zfsutils-linux
 sudo systemctl stop docker
 sudo cp -au /var/lib/docker /var/lib/docker.bk
 sudo rm -rf /var/lib/docker
+sudo apt install zfsutils-linux
 sudo zpool create -O compression=lz4 -f zpool-docker -m /var/lib/docker /dev/nvme1n1
-sudo vi /etc/docker/daemon.json
-{
-  "storage-driver": "zfs"
-}
+sudo cp ~/MariaDB-Stack/script/docker_daemon.json /etc/docker/daemon.json
 sudo systemctl start docker
+```
+
+### 3.4 Install MariaDB
+```bash
+# Create the zpool for MariaDB
+sudo zpool create -O atime=off -O compression=lz4 -O logbias=throughput -O primarycache=metadata -O recordsize=16k -O xattr=sa \
+    -f zpool-mysql -m /var/lib/mysql /dev/nvme2n1
+
+# Setup Repository
+curl -LsS https://downloads.mariadb.com/MariaDB/mariadb_repo_setup | sudo bash -s -- --skip-maxscale --skip-tools
+
+# Install MariaDB
+sudo apt-get install mariadb-server galera-4 mariadb-client libmariadb3 mariadb-backup mariadb-common
+sudo mysql_secure_installation
+
+# Stop and disable MariaDB for now.
+sudo systemctl stop mariadb
+sudo systemctl disable mariadb
 ```
 
 ### [3.4 Setup PMM](https://www.percona.com/doc/percona-monitoring-and-management/2.x/install/docker.html)
@@ -153,6 +162,12 @@ docker create --volume /srv --name pmm-data percona/pmm-server:2 /bin/true
 # Run the image to start PMM Server.
 docker run --detach --restart always --publish 443:443 --volumes-from pmm-data \
     --name pmm-server percona/pmm-server:2
+```
+
+### 3.5 Patch and Reboot
+```bash
+sudo apt-get update
+sudo apt-get upgrade --with-new-pkgs
 ```
 
 ## 1. Setup Nodes
