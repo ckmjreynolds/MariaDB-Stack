@@ -1,29 +1,102 @@
 # MariaDB-Stack
-A simplified, reference implementation of a database stack consisting of two three-node Galera clusters running MariaDB, two three-node ProxySQL clusters to provide load balancing, and PMM to provide monitoring.
+A simplified, reference implementation of a database stack consisting of a three-node Galera cluster running MariaDB, two ProxySQL instances to provide load balancing, and PMM to provide monitoring.
 
 ## Example Deployment (AWS)
-```mermaid
-graph TD
-    proxysql1[\ProxySQL1/]
-    galera1[Galera Nodes]
-    proxysql1-->galera1
-
-    proxysql2[\ProxySQL2/]
-    galera2[Galera Nodes]
-    proxysql2-->galera2
-```
-The example deployment utilizes seven AWS EC2 instances. The sample configuration is as small as possible and not practical for production loads.
+The example deployment utilizes six AWS EC2 instances. The sample configuration is as small as possible and not practical for production loads.
 
 ### Instances
-| Hostname | Instance Type    | Availability Zone | Operating System      | Description               |
-| :------- | :--------------- | :---------------- |:--------------------- | :-------------------------|
-| `kerbin` | `t3.small 2GB`   | `us-east-1c`      | `Ubuntu 20.04.01 LTS` | PMM from AWS Marketplace  |
-| `moho`   | `t3a.small 2GB`  | `us-east-1a`      | `Ubuntu 20.04.01 LTS` | `MariaDB` and `ProxySQL`  |
-| `eve`    | `t3a.small 2GB`  | `us-east-1a`      | `Ubuntu 20.04.01 LTS` | `MariaDB` and `ProxySQL`  |
-| `duna`   | `t3a.small 2GB`  | `us-east-1a`      | `Ubuntu 20.04.01 LTS` | `MariaDB` and `ProxySQL`  |
-| `dres`   | `t3a.small 2GB`  | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | `MariaDB` and `ProxySQL`  |
-| `jool`   | `t3a.small 2GB`  | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | `MariaDB` and `ProxySQL`  |
-| `eeloo`  | `t3a.small 2GB`  | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | `MariaDB` and `ProxySQL`  |
+| Hostname    | Instance Type    | Availability Zone | Operating System      | Description               |
+| :---------- | :--------------- | :---------------- |:--------------------- | :-------------------------|
+| `monitor`   | `t3a.small 2GB`  | `us-east-1c`      | `Ubuntu 20.04.01 LTS` | PMM inside Docker         |
+| `proxysql1` | `t3a.nano 512MB` | `us-east-1a`      | `Ubuntu 20.04.01 LTS` | `ProxySQL`                |
+| `proxysql2` | `t3a.nano 512MB` | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | `ProxySQL`                |
+| `galera1`   | `t4g.micro`      | `us-east-1a`      | `Ubuntu 20.04.01 LTS` | `MariaDB Galera` Node 1   |
+| `galera2`   | `t4g.micro`      | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | `MariaDB Galera` Node 2   |
+| `galera3`   | `t4g.micro`      | `us-east-1c`      | `Ubuntu 20.04.01 LTS` | `MariaDB Galera` Node 3   |
+
+## 1. Setup Network
+### Create Default VPC
+This is only needed if the default VPC was deleted.
+
+```bash
+aws ec2 create-default-vpc
+aws ec2 create-tags --resources $(aws ec2 describe-vpcs --filters "Name=isDefault,Values=true"|jq -r '.Vpcs[].VpcId') --tags "Key=Name,Value=default"
+```
+
+### Create Monitor Security Group
+```bash
+aws ec2 create-security-group --group-name monitor-sg --description "Monitor Security Group" --tag-specifications "ResourceType=security-group,Tags={Key=Name,Value=monitor-sg}"
+
+aws ec2 authorize-security-group-ingress --group-name monitor-sg \
+    --ip-permissions IpProtocol=tcp,FromPort=443,ToPort=443,IpRanges='[{CidrIp=172.31.0.0/16,Description="HTTPS for Monitoring."}]'
+
+aws ec2 authorize-security-group-ingress --group-name monitor-sg \
+    --ip-permissions IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges='[{CidrIp='$(dig +short myip.opendns.com @resolver1.opendns.com)'/32,Description="SSH for Administration."}]'
+
+aws ec2 authorize-security-group-ingress --group-name monitor-sg \
+    --ip-permissions IpProtocol=tcp,FromPort=443,ToPort=443,IpRanges='[{CidrIp='$(dig +short myip.opendns.com @resolver1.opendns.com)'/32,Description="HTTPS for Monitoring."}]'
+```
+
+### Create Database Security Group
+```bash
+aws ec2 create-security-group --group-name database-sg --description "Database Security Group" --tag-specifications "ResourceType=security-group,Tags={Key=Name,Value=database-sg}"
+
+aws ec2 authorize-security-group-ingress --group-name database-sg \
+    --ip-permissions IpProtocol=tcp,FromPort=6033,ToPort=6033,IpRanges='[{CidrIp=172.31.0.0/16,Description="ProxySQL SQL traffic from VPC."}]'
+
+aws ec2 authorize-security-group-ingress --group-name database-sg \
+    --ip-permissions IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges='[{CidrIp='$(dig +short myip.opendns.com @resolver1.opendns.com)'/32,Description="SSH for Administration."}]'
+
+aws ec2 authorize-security-group-ingress --group-name database-sg \
+    --ip-permissions IpProtocol=tcp,FromPort=6032,ToPort=6032,IpRanges='[{CidrIp='$(dig +short myip.opendns.com @resolver1.opendns.com)'/32,Description="ProxySQL for Administration."}]'
+
+aws ec2 authorize-security-group-ingress --group-name database-sg \
+    --ip-permissions IpProtocol=tcp,FromPort=6033,ToPort=6033,IpRanges='[{CidrIp='$(dig +short myip.opendns.com @resolver1.opendns.com)'/32,Description="ProxySQL SQL traffic for Administration."}]'
+```
+
+## 2. Create the IAM Policy and Role `db-stack` / `db-stack-role`
+```JSON
+{
+    "Version": "2012-10-17",
+    "Statement":[
+        {
+            "Action":[
+                "route53:ChangeResourceRecordSets",
+                "route53:GetHostedZone",
+                "route53:ListResourceRecordSets"
+            ],
+            "Effect":"Allow",
+            "Resource":[
+            "arn:aws:route53:::hostedzone/<Your zone ID>"
+            ]
+        },
+        {
+            "Action":[
+                "route53:ListHostedZones",
+                "route53:ListHostedZonesByName"
+            ],
+            "Effect":"Allow",
+            "Resource":[
+            "*"
+            ]
+        }
+    ]
+}
+```
+
+## 3. Create the `monitor` Instance
+```bash
+# Ubuntu Server 20.04 LTS (HVM), SSD Volume Type - ami-0dba2cb6798deb6d8 (64-bit x86) / ami-0ea142bd244023692 (64-bit Arm)
+aws ec2 run-instances --key-name aws_chris_reynolds --instance-type t3a.small --image-id ami-0dba2cb6798deb6d8 \
+    --security-group-ids $(aws ec2 describe-security-groups --group-name monitor-sg|jq -r '.SecurityGroups[].GroupId') \
+    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1c"|jq -r '.Subnets[].SubnetId') \
+    --block-device-mappings "DeviceName=/dev/sdb,Ebs={DeleteOnTermination=true,VolumeSize=10,VolumeType=gp2}" \
+    --iam-instance-profile Name="db-stack-role" \
+    --credit-specification CpuCredits="standard" \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=monitor},{Key=Domain,Value=mssux.com}]"
+```
+
+### 
 
 ## 1. Setup Nodes
 ### 1.1 Create the Security Group
@@ -41,11 +114,6 @@ Create a `General Pupose` EFS volume for the `backup` volume.
 {
     "Version": "2012-10-17",
     "Statement":[
-        {
-            "Effect": "Allow",
-            "Action": "ec2:Describe*",
-            "Resource": "*"
-        },
         {
             "Action":[
                 "route53:ChangeResourceRecordSets",
@@ -340,3 +408,120 @@ SOURCE /mnt/backup/MariaDB-Stack/initdb.d/001_CREATE_USERS.sql
 sudo mysql -e "select variable_name, variable_value from information_schema.global_status where variable_name in ('wsrep_cluster_size', 'wsrep_local_state_comment', 'wsrep_cluster_status', 'wsrep_incoming_addresses');"
 mysql -h 127.0.0.1 -P6032 -u radmin -ppass -e "select hostgroup_id,hostname,status from runtime_mysql_servers;"
 ```
+
+# mssux.com - Playbook
+
+## [Install AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2-mac.html)
+### Install
+1. Download and Install `AWSCLIV2.pkg`
+```bash
+curl "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o "AWSCLIV2.pkg"
+sudo installer -pkg AWSCLIV2.pkg -target /
+```
+2. Verify Install
+```bash
+aws --version
+aws-cli/2.0.52 Python/3.7.4 Darwin/19.6.0 exe/x86_64
+```
+
+### Configure
+```bash
+aws configure
+```
+
+## Create Default VPC
+This is only needed if the default VPC was deleted.
+
+```bash
+aws ec2 create-default-vpc     
+aws ec2 create-tags --resources $(aws ec2 describe-vpcs --filters "Name=isDefault,Values=true"|jq -r '.Vpcs[].VpcId') --tags "Key=Name,Value=default"
+```
+
+## Create the Aurora Serverless Cluster
+### Create Database Security Group
+```bash
+aws ec2 create-security-group --group-name mssux-database-sg --description "Database Security Group" \
+    --tag-specifications "ResourceType=security-group,Tags={Key=Name,Value=mssux-database-sg}"
+```
+
+#### Add Ingress for MySQL/Aurora 
+```bash
+aws ec2 authorize-security-group-ingress --group-name mssux-database-sg \
+    --ip-permissions IpProtocol=tcp,FromPort=3306,ToPort=3306,IpRanges='[{CidrIp=172.31.0.0/16,Description="MySQL/MariaDB/Aurora from VPC."}]'
+```
+
+### Create Database Cluster Parameter Group
+```bash
+aws rds create-db-cluster-parameter-group --db-cluster-parameter-group-name mssux-database-pg \
+    --db-parameter-group-family aurora-mysql5.7 --description "Aurora Serverless PG."
+
+aws rds modify-db-cluster-parameter-group \
+    --db-cluster-parameter-group-name mssux-database-pg \
+    --parameters "ParameterName=character_set_server,ParameterValue=utf8mb4,ApplyMethod=immediate" \
+                 "ParameterName=collation_server,ParameterValue=utf8mb4_unicode_ci,ApplyMethod=immediate" \
+                 "ParameterName=time_zone,ParameterValue=US/Central,ApplyMethod=immediate"
+```
+
+### Create the Cluster
+```bash
+aws rds create-db-cluster \
+    --db-cluster-identifier mssux-database-cluster \
+    --engine aurora-mysql \
+    --engine-version 5.7.mysql_aurora.2.07.1 \
+    --engine-mode serverless \
+    --backup-retention-period 7 \
+    --vpc-security-group-ids $(aws ec2 describe-security-groups --group-name mssux-database-sg|jq -r '.SecurityGroups[].GroupId') \
+    --scaling-configuration MinCapacity=1,MaxCapacity=4,SecondsUntilAutoPause=300,AutoPause=true \
+    --db-cluster-parameter-group-name mssux-database-pg \
+    --availability-zones us-east-1a us-east-1b us-east-1c \
+    --preferred-backup-window 07:00-07:30 \
+    --preferred-maintenance-window Mon:06:00-Mon:06:30 \
+    --master-username <user> --master-user-password <password> \
+    --tags "Key=Name,Value=mssux-database-cluster"
+```
+
+## Create the Bastion Server
+### Create Bastion Security Group
+```bash
+aws ec2 create-security-group --group-name bastion-sg --description "Bastion Security Group" \
+    --tag-specifications "ResourceType=security-group,Tags={Key=Name,Value=bastion-sg}"
+```
+
+#### Add Ingress for SSH 
+```bash
+aws ec2 authorize-security-group-ingress --group-name bastion-sg \
+    --ip-permissions IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges='[{CidrIp='$(dig +short myip.opendns.com @resolver1.opendns.com)'/32,Description="SSH for Administration."}]'
+```
+
+### Launch the Bastion Host
+Launch the host manually.
+
+```bash
+# Install packages.
+sudo apt-get update
+sudo apt-get install cloud-utils ec2-api-tools
+
+# Install cli53.
+git clone --single-branch --branch 0.1.4 https://github.com/ckmjreynolds/MariaDB-Stack.git
+wget https://github.com/barnybug/cli53/releases/download/0.8.17/cli53-linux-arm64
+sudo cp /home/ubuntu/cli53-linux-arm64 /usr/local/bin/cli53
+sudo chmod +x /usr/local/bin/cli53
+
+# Install registerRoute53.sh script.
+sudo cp /home/ubuntu/MariaDB-Stack/script/registerRoute53.sh /usr/local/bin/registerRoute53.sh
+sudo chmod +x /usr/local/bin/registerRoute53.sh
+
+# Schedule the script to run on reboot.
+crontab -e
+@reboot /usr/local/bin/registerRoute53.sh
+
+# Reboot the server and verify DNS entry is added/updated.
+sudo reboot
+```
+
+## Cleanup
+```bash
+```
+
+ssh ubuntu@bastion.mssux.com -L 3306:db.mssux.com:3306
+curl -o- -L https://slss.io/install | bash
