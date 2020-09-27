@@ -128,7 +128,7 @@ sudo systemctl stop docker
 sudo cp -au /var/lib/docker /var/lib/docker.bk
 sudo rm -rf /var/lib/docker
 sudo apt install zfsutils-linux
-sudo zpool create -O compression=lz4 -f zpool-docker -m /var/lib/docker /dev/nvme1n1
+sudo zpool create -o autoexpand=on -O compression=lz4 -f zpool-docker -m /var/lib/docker /dev/nvme1n1
 sudo cp ~/MariaDB-Stack/script/docker_daemon.json /etc/docker/daemon.json
 sudo systemctl start docker
 ```
@@ -137,7 +137,7 @@ sudo systemctl start docker
 ```bash
 # Create the zpool for MariaDB
 sudo zpool create -O atime=off -O compression=lz4 -O logbias=throughput -O primarycache=metadata -O recordsize=16k -O xattr=sa \
-    -f zpool-mysql -m /var/lib/mysql /dev/nvme2n1
+    -o autoexpand=on -f zpool-mysql -m /var/lib/mysql /dev/nvme2n1
 
 # Setup Repository
 curl -LsS https://downloads.mariadb.com/MariaDB/mariadb_repo_setup | sudo bash -s -- --skip-maxscale --skip-tools
@@ -150,6 +150,14 @@ sudo mysql_secure_installation
 sudo systemctl stop mariadb
 sudo systemctl disable mariadb
 ```
+
+### 3.4 Patch and Reboot
+```bash
+sudo apt-get update
+sudo apt-get upgrade --with-new-pkgs
+```
+
+# TODO - HERE
 
 ### [3.4 Setup PMM](https://www.percona.com/doc/percona-monitoring-and-management/2.x/install/docker.html)
 ```bash
@@ -164,11 +172,6 @@ docker run --detach --restart always --publish 443:443 --volumes-from pmm-data \
     --name pmm-server percona/pmm-server:2
 ```
 
-### 3.5 Patch and Reboot
-```bash
-sudo apt-get update
-sudo apt-get upgrade --with-new-pkgs
-```
 
 ## 1. Setup Nodes
 ### 1.1 Create the Security Group
@@ -597,3 +600,6 @@ sudo reboot
 
 ssh ubuntu@bastion.mssux.com -L 3306:db.mssux.com:3306
 curl -o- -L https://slss.io/install | bash
+
+
+sudo zfs get all /var/lib/mysql |grep compressratio
