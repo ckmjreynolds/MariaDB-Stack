@@ -203,16 +203,20 @@ curl -LsS https://downloads.mariadb.com/MariaDB/mariadb_repo_setup | sudo bash -
 sudo apt-get install --yes mariadb-server galera-4 mariadb-client libmariadb3 mariadb-backup mariadb-common
 sudo mysql_secure_installation
 
-# Stop and disable MariaDB for now.
-sudo systemctl stop mariadb
-sudo systemctl disable mariadb
-
 # Install S3 File System (for backups)
 sudo apt-get install s3fs
 sudo -i
 mkdir /mnt/backup
 echo 's3fs#mssux-backups /mnt/backup fuse _netdev,allow_other,iam_role=auto,storage_class=intelligent_tiering 0 0' >> /etc/fstab
 reboot
+
+# Setup backups.
+sudo wget -O /home/mysql https://raw.githubusercontent.com/ckmjreynolds/MariaDB-Stack/0.1.4/script/backup.sh
+sudo wget -O /home/mysql/.my.cnf https://raw.githubusercontent.com/ckmjreynolds/MariaDB-Stack/0.1.4/script/.my.cnf
+sudo chown -R mysql:mysql /home/mysql
+# Stop and disable MariaDB for now.
+sudo systemctl stop mariadb
+sudo systemctl disable mariadb
 ```
 
 ### 3.4 Patch and Reboot

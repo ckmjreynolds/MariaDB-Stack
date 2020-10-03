@@ -29,7 +29,7 @@
 #  2020-10-03  CDR     Initial Version
 # **************************************************************************************
 BACKUPDIR=/mnt/backup
-TARGETFILE=$BACKUPDIR/`date +%F_%H-%M-%S`.xb.gz.enc
+TARGETFILE=$BACKUPDIR/`date +%F_%H-%M-%S`.${HOSTNAME}.xb.gz.enc
 
 # Create a FULL, compressed, encrypted backup.
 mariabackup --backup --stream=xbstream | gzip | openssl  enc -aes-256-cbc -k $1 > $TARGETFILE
