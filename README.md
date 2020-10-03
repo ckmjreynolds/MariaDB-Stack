@@ -5,11 +5,12 @@ A simplified, reference implementation of a database stack consisting of a three
 The example deployment utilizes six AWS EC2 instances. The sample configuration is as small as possible and not practical for production loads.
 
 ### Instances
-| Hostname | Instance Type  | Availability Zone | Operating System      | Description                     |
-| :--------| :------------- | :---------------- |:--------------------- | :------------------------------ |
-| `moho`   | `t3.micro 1GB` | `us-east-1a`      | `Ubuntu 20.04.01 LTS` | `MariaDB Galera` and `ProxySQL` |
-| `eve`    | `t3.micro 1GB` | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | `MariaDB Galera` and `ProxySQL` |
-| `kerbin` | `t3.small 2GB` | `us-east-1c`      | `Ubuntu 20.04.01 LTS` | `MariaDB Galera` and `PMM`      |
+| Hostname  | Instance Type     | Availability Zone | Operating System      | Description              |
+| :-------- | :---------------- | :---------------- |:--------------------- | :----------------------- |
+| `monitor` | `t3.small 2GB`    | `us-east-1c`      | `Ubuntu 20.04.01 LTS` | `PMM Monitoring`         |
+| `db1`     | `c6gd.medium 2GB` | `us-east-1a`      | `Ubuntu 20.04.01 LTS` | `Galera Node #1`         |
+| `db2`     | `c6gd.medium 2GB` | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | `Galera Node #2`         |
+| `db3`     | `c6gd.medium 2GB` | `us-east-1c`      | `Ubuntu 20.04.01 LTS` | `Galera Node #3`         |
 
 ## 1. Setup Network
 ### Create Default VPC
@@ -26,6 +27,9 @@ aws ec2 create-security-group --group-name database-sg --description "Database S
 
 aws ec2 authorize-security-group-ingress --group-name database-sg \
     --ip-permissions IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges='[{CidrIp='$(dig +short myip.opendns.com @resolver1.opendns.com)'/32,Description="SSH for Administration."}]'
+
+aws ec2 authorize-security-group-ingress --group-name database-sg \
+    --ip-permissions IpProtocol=tcp,FromPort=443,ToPort=443,IpRanges='[{CidrIp='$(dig +short myip.opendns.com @resolver1.opendns.com)'/32,Description="HTTPS for Administration."}]'
 ```
 
 ## 2. Create the IAM Policy and Role `db-stack` / `db-stack-role`
@@ -37,6 +41,21 @@ aws ec2 authorize-security-group-ingress --group-name database-sg \
             "Effect": "Allow",
             "Action": "ec2:Describe*",
             "Resource": "*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": ["s3:GetBucketLocation","s3:ListAllMyBuckets"],
+            "Resource": "arn:aws:s3:::*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": ["s3:ListBucket"],
+            "Resource": ["arn:aws:s3:::mssux-backups"]
+        },
+        {
+            "Effect": "Allow",
+            "Action": ["s3:PutObject","s3:GetObject","s3:DeleteObject"],
+            "Resource": ["arn:aws:s3:::mssux-backups/*"]
         },
         {
              "Action":[
@@ -51,6 +70,7 @@ aws ec2 authorize-security-group-ingress --group-name database-sg \
         },
         {
             "Action":[
+                "route53:GetChange",
                 "route53:ListHostedZones",
                 "route53:ListHostedZonesByName"
             ],
@@ -58,57 +78,49 @@ aws ec2 authorize-security-group-ingress --group-name database-sg \
             "Resource":[
             "*"
             ]
-        }
+        },
     ]
 }
 ```
 
-## 3. Create the EC2 Instances
-```bash
+```
 # Ubuntu Server 20.04 LTS (HVM), SSD Volume Type - ami-0dba2cb6798deb6d8 (64-bit x86) / ami-0ea142bd244023692 (64-bit Arm)
-aws ec2 run-instances --key-name aws_chris_reynolds --instance-type t3.micro --image-id ami-0dba2cb6798deb6d8 \
-    --security-group-ids $(aws ec2 describe-security-groups --group-name database-sg|jq -r '.SecurityGroups[].GroupId') \
-    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1a"|jq -r '.Subnets[].SubnetId') \
-    --block-device-mappings "DeviceName=/dev/sdb,Ebs={DeleteOnTermination=true,VolumeSize=10,VolumeType=gp2}" "DeviceName=/dev/sdc,Ebs={DeleteOnTermination=true,VolumeSize=10,VolumeType=gp2}" \
-    --iam-instance-profile Name="db-stack-role" \
-    --credit-specification CpuCredits="unlimited" \
-    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=moho},{Key=Domain,Value=<domain>}]"
+# Ubuntu 20.04.1 LTS aarch64 (includes 3.1 below) - ami-00bae8092a688e69e
+# sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder
+```
 
-aws ec2 run-instances --key-name aws_chris_reynolds --instance-type t3.micro --image-id ami-0dba2cb6798deb6d8 \
-    --security-group-ids $(aws ec2 describe-security-groups --group-name database-sg|jq -r '.SecurityGroups[].GroupId') \
-    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1b"|jq -r '.Subnets[].SubnetId') \
-    --block-device-mappings "DeviceName=/dev/sdb,Ebs={DeleteOnTermination=true,VolumeSize=10,VolumeType=gp2}" "DeviceName=/dev/sdc,Ebs={DeleteOnTermination=true,VolumeSize=10,VolumeType=gp2}" \
-    --iam-instance-profile Name="db-stack-role" \
-    --credit-specification CpuCredits="unlimited" \
-    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=eve},{Key=Domain,Value=<domain>}]"
-
-aws ec2 run-instances --key-name aws_chris_reynolds --instance-type t3.small --image-id ami-0dba2cb6798deb6d8 \
+## 3. Create the `monitor` EC2 Instance
+```bash
+# Ubuntu 20.04.1 LTS x86_64 (includes 3.1 below) - ami-0813f39f84cc21ebf
+aws ec2 run-instances --key-name aws_chris_reynolds --instance-type t3.small --image-id ami-0813f39f84cc21ebf \
     --security-group-ids $(aws ec2 describe-security-groups --group-name database-sg|jq -r '.SecurityGroups[].GroupId') \
     --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1c"|jq -r '.Subnets[].SubnetId') \
-    --block-device-mappings "DeviceName=/dev/sdb,Ebs={DeleteOnTermination=true,VolumeSize=10,VolumeType=gp2}" "DeviceName=/dev/sdc,Ebs={DeleteOnTermination=true,VolumeSize=10,VolumeType=gp2}" \
+    --block-device-mappings "DeviceName=/dev/sdb,Ebs={DeleteOnTermination=true,VolumeSize=10,VolumeType=gp2}" \
     --iam-instance-profile Name="db-stack-role" \
     --credit-specification CpuCredits="unlimited" \
-    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=kerbin},{Key=Domain,Value=<domain>}]"
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=monitor},{Key=Domain,Value=mssux.com}]"
 ```
 
 ### 3.1 Setup Route 53 Registration
 ```bash
-# Clone this git repository.
-cd ~; rm -rf ~/MariaDB-Stack; git clone --single-branch --branch 0.1.4 https://github.com/ckmjreynolds/MariaDB-Stack.git
+# Set the TimeZone
+sudo timedatectl set-timezone America/Chicago
 
 # Install packages.
-sudo apt-get update; sudo apt-get install cloud-utils ec2-api-tools
+sudo apt-get update; sudo apt-get install --yes screen zfsutils-linux cloud-utils ec2-api-tools
 
 # Install cli53.
-sudo cp ~/MariaDB-Stack/install/cli53-linux-$(uname -i) /usr/local/bin/cli53
+sudo wget -O /usr/local/bin/cli53 https://github.com/barnybug/cli53/releases/download/0.8.17/cli53-linux-amd64
+# OR
+sudo wget -O /usr/local/bin/cli53 https://github.com/barnybug/cli53/releases/download/0.8.17/cli53-linux-arm64
 sudo chmod +x /usr/local/bin/cli53
 
 # Install registerRoute53.sh script.
-sudo cp ~/MariaDB-Stack/script/registerRoute53.sh /usr/local/bin/registerRoute53.sh
+sudo wget -O /usr/local/bin/registerRoute53.sh https://raw.githubusercontent.com/ckmjreynolds/MariaDB-Stack/0.1.4/script/registerRoute53.sh
 sudo chmod +x /usr/local/bin/registerRoute53.sh
 
 # Schedule the script to run on reboot.
-(cat ~/MariaDB-Stack/script/crontab)| crontab -
+(wget -O - https://raw.githubusercontent.com/ckmjreynolds/MariaDB-Stack/0.1.4/script/crontab)| crontab -
 
 # Reboot the server and verify DNS entry is added/updated.
 sudo reboot
@@ -127,37 +139,11 @@ rm get-docker.sh
 sudo systemctl stop docker
 sudo cp -au /var/lib/docker /var/lib/docker.bk
 sudo rm -rf /var/lib/docker
-sudo apt install zfsutils-linux
-sudo zpool create -o autoexpand=on -O compression=lz4 -f zpool-docker -m /var/lib/docker /dev/nvme1n1
-sudo cp ~/MariaDB-Stack/script/docker_daemon.json /etc/docker/daemon.json
+sudo zpool create -o ashift=12 -o autoexpand=on -O relatime=on -O compression=lz4 -f zpool-docker -m /var/lib/docker /dev/nvme1n1
+sudo wget -O /etc/docker/daemon.json https://raw.githubusercontent.com/ckmjreynolds/MariaDB-Stack/0.1.4/script/docker_daemon.json
 sudo systemctl start docker
+sudo rm -rf /var/lib/docker.bk
 ```
-
-### 3.4 Install MariaDB
-```bash
-# Create the zpool for MariaDB
-sudo zpool create -O atime=off -O compression=lz4 -O logbias=throughput -O primarycache=metadata -O recordsize=16k -O xattr=sa \
-    -o autoexpand=on -f zpool-mysql -m /var/lib/mysql /dev/nvme2n1
-
-# Setup Repository
-curl -LsS https://downloads.mariadb.com/MariaDB/mariadb_repo_setup | sudo bash -s -- --skip-maxscale --skip-tools
-
-# Install MariaDB
-sudo apt-get install mariadb-server galera-4 mariadb-client libmariadb3 mariadb-backup mariadb-common
-sudo mysql_secure_installation
-
-# Stop and disable MariaDB for now.
-sudo systemctl stop mariadb
-sudo systemctl disable mariadb
-```
-
-### 3.4 Patch and Reboot
-```bash
-sudo apt-get update
-sudo apt-get upgrade --with-new-pkgs
-```
-
-# TODO - HERE
 
 ### [3.4 Setup PMM](https://www.percona.com/doc/percona-monitoring-and-management/2.x/install/docker.html)
 ```bash
@@ -172,6 +158,71 @@ docker run --detach --restart always --publish 443:443 --volumes-from pmm-data \
     --name pmm-server percona/pmm-server:2
 ```
 
+### [3.5 Setup SSL Encryption](https://hub.docker.com/r/certbot/dns-route53)
+```bash
+# Get SSL certificates.
+docker run -it --rm --name certbot -v "/etc/letsencrypt:/etc/letsencrypt" \
+    -v "/var/lib/letsencrypt:/var/lib/letsencrypt" certbot/dns-route53 \
+    certonly --dns-route53 -d monitor.mssux.com
+
+# Copy the SSL certificates.
+sudo -i
+cp -L /etc/letsencrypt/live/monitor.mssux.com/*.pem /home/ubuntu/.
+chown ubuntu:ubuntu /home/ubuntu/*.pem
+docker cp /home/ubuntu/fullchain.pem pmm-server:/srv/nginx/certificate.crt
+docker cp /home/ubuntu/privkey.pem pmm-server:/srv/nginx/certificate.key
+docker cp /home/ubuntu/chain.pem pmm-server:/srv/nginx/ca-certs.pem
+
+# Restart pmm-server.
+docker restart pmm-server
+```
+
+## 4. Create the `db1` EC2 Instance
+```bash
+# Ubuntu 20.04.1 LTS aarch64 (includes 3.1 below) - ami-00bae8092a688e69e
+aws ec2 run-instances --key-name aws_chris_reynolds --instance-type c6gd.medium --image-id ami-00bae8092a688e69e \
+    --security-group-ids $(aws ec2 describe-security-groups --group-name database-sg|jq -r '.SecurityGroups[].GroupId') \
+    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1a"|jq -r '.Subnets[].SubnetId') \
+    --iam-instance-profile Name="db-stack-role" \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=db1},{Key=Domain,Value=mssux.com}]"
+```
+
+### 4.1 Repeat [3.1](#31-setup-route-53-registration)
+Repeat the Route 53 auto-registration steps above.
+
+### 3.4 Install MariaDB
+```bash
+# Create the zpool for MariaDB
+sudo zpool create -O relatime=on -O compression=lz4 -O logbias=throughput -O primarycache=metadata -O recordsize=16k -O xattr=sa \
+    -o ashift=12 -o autoexpand=on -f zpool-mysql -m /var/lib/mysql /dev/nvme1n1
+
+# Setup Repository
+curl -LsS https://downloads.mariadb.com/MariaDB/mariadb_repo_setup | sudo bash -s -- --skip-maxscale --skip-tools
+
+# Install MariaDB
+sudo apt-get install --yes mariadb-server galera-4 mariadb-client libmariadb3 mariadb-backup mariadb-common
+sudo mysql_secure_installation
+
+# Stop and disable MariaDB for now.
+sudo systemctl stop mariadb
+sudo systemctl disable mariadb
+
+# Install S3 File System (for backups)
+sudo apt-get install s3fs
+sudo -i
+mkdir /mnt/backup
+echo 's3fs#mssux-backups /mnt/backup fuse _netdev,allow_other,iam_role=auto,storage_class=intelligent_tiering 0 0' >> /etc/fstab
+reboot
+```
+
+### 3.4 Patch and Reboot
+```bash
+sudo apt-get update
+sudo apt-get upgrade --with-new-pkgs
+sudo apt-get clean
+```
+
+# TODO - HERE
 
 ## 1. Setup Nodes
 ### 1.1 Create the Security Group
@@ -603,3 +654,305 @@ curl -o- -L https://slss.io/install | bash
 
 
 sudo zfs get all /var/lib/mysql |grep compressratio
+
+```bash
+# Create a temporary server to uses.
+aws ec2 run-instances --key-name aws_chris_reynolds --instance-type t4g.micro --image-id ami-0ea142bd244023692 \
+    --security-group-ids $(aws ec2 describe-security-groups --group-name database-sg|jq -r '.SecurityGroups[].GroupId') \
+    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1a"|jq -r '.Subnets[].SubnetId') \
+    --block-device-mappings "DeviceName=/dev/sdb,Ebs={DeleteOnTermination=true,VolumeSize=10,VolumeType=gp2}" \
+    --iam-instance-profile Name="db-stack-role" \
+    --credit-specification CpuCredits="unlimited" \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=temp},{Key=Domain,Value=mssux.com}]"
+
+# https://openzfs.github.io/openzfs-docs/Getting%20Started/Ubuntu/Ubuntu%2020.04%20Root%20on%20ZFS.html#
+sudo -i
+
+# Update apt and install required packages
+apt-get update; apt install --yes gdisk zfs-initramfs
+systemctl stop zed
+
+# Partition the new root EBS volume
+DISK=/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_vol0622f205e7c19abdd
+sgdisk --zap-all ${DISK}
+
+# EFI system partition
+sgdisk -n1:1M:+512M -t1:EF00 $DISK
+
+# For legacy (BIOS) booting:
+sgdisk -a1 -n5:24K:+1000K -t5:EF02 $DISK
+
+# SWAP Partition
+sgdisk -n2:0:+500M -t2:8200 $DISK
+
+# Create a boot pool partition:
+sgdisk -n3:0:+2G -t3:BE00 $DISK
+
+# Create a root pool partition: Unencrypted or ZFS native encryption:
+sgdisk -n4:0:0 -t4:BF00 $DISK
+
+# Create the boot pool.
+zpool create \
+    -o ashift=12 -d \
+    -o feature@async_destroy=enabled \
+    -o feature@bookmarks=enabled \
+    -o feature@embedded_data=enabled \
+    -o feature@empty_bpobj=enabled \
+    -o feature@enabled_txg=enabled \
+    -o feature@extensible_dataset=enabled \
+    -o feature@filesystem_limits=enabled \
+    -o feature@hole_birth=enabled \
+    -o feature@large_blocks=enabled \
+    -o feature@lz4_compress=enabled \
+    -o feature@spacemap_histogram=enabled \
+    -O acltype=posixacl -O canmount=off -O compression=lz4 \
+    -O devices=off -O normalization=formD -O relatime=on -O xattr=sa \
+    -O mountpoint=/boot -R /mnt \
+    bpool ${DISK}-part3
+
+# Create zpool and filesystems on the new EBS volume
+zpool create \
+    -o ashift=12 \
+    -O acltype=posixacl -O canmount=off -O compression=lz4 \
+    -O dnodesize=auto -O normalization=formD -O relatime=on \
+    -O xattr=sa -O mountpoint=/ -R /mnt \
+    rpool ${DISK}-part4
+
+# Create filesystem datasets to act as containers:
+zfs create -o canmount=off -o mountpoint=none rpool/ROOT
+zfs create -o canmount=off -o mountpoint=none bpool/BOOT
+
+# Create filesystem datasets for the root and boot filesystems:
+zfs create -o canmount=noauto -o mountpoint=/ -o com.ubuntu.zsys:bootfs=yes -o com.ubuntu.zsys:last-used=$(date +%s) rpool/ROOT/ubuntu
+zfs mount rpool/ROOT/ubuntu
+
+zfs create -o canmount=noauto -o mountpoint=/boot bpool/BOOT/ubuntu
+zfs mount bpool/BOOT/ubuntu
+
+# Create datasets:
+zfs create -o com.ubuntu.zsys:bootfs=no rpool/ROOT/ubuntu/srv
+zfs create -o com.ubuntu.zsys:bootfs=no -o canmount=off rpool/ROOT/ubuntu/usr
+zfs create rpool/ROOT/ubuntu/usr/local
+zfs create -o com.ubuntu.zsys:bootfs=no -o canmount=off rpool/ROOT/ubuntu/var
+zfs create rpool/ROOT/ubuntu/var/lib
+zfs create rpool/ROOT/ubuntu/var/lib/AccountsService
+zfs create rpool/ROOT/ubuntu/var/lib/apt
+zfs create rpool/ROOT/ubuntu/var/lib/dpkg
+zfs create rpool/ROOT/ubuntu/var/log
+zfs create rpool/ROOT/ubuntu/var/mail
+zfs create rpool/ROOT/ubuntu/var/snap
+zfs create rpool/ROOT/ubuntu/var/spool
+
+zfs create -o canmount=off -o mountpoint=/ rpool/USERDATA
+zfs create -o com.ubuntu.zsys:bootfs-datasets=rpool/ROOT/ubuntu -o canmount=on -o mountpoint=/root rpool/USERDATA/root
+
+# A tmpfs is recommended later, but if you want a separate dataset for /tmp:
+zfs create -o com.ubuntu.zsys:bootfs=no rpool/ROOT/ubuntu/tmp
+chmod 1777 /mnt/tmp
+
+# Copy the filesystem.
+rsync -axHAWXS --numeric-ids --info=progress2 / /mnt/
+
+# Create mount points and chroot.
+# Bind the virtual filesystems to the new system and chroot into it:
+mount --rbind /dev  /mnt/dev
+mount --rbind /proc /mnt/proc
+mount --rbind /sys  /mnt/sys
+chroot /mnt /usr/bin/env DISK=$DISK bash --login
+
+# Create the EFI filesystem Perform these steps for both UEFI and legacy (BIOS) booting:
+rm -rf /boot/*
+mkdosfs -F 32 -s 1 -n EFI ${DISK}-part1
+mkdir /boot/efi
+echo UUID=$(blkid -s UUID -o value ${DISK}-part1) /boot/efi vfat umask=0022,fmask=0022,dmask=0022 0 1 >> /etc/fstab
+mount /boot/efi
+
+# Put /boot/grub on the EFI System Partition For a single-disk install only:
+mkdir /boot/efi/grub /boot/grub
+echo /boot/efi/grub /boot/grub none defaults,bind 0 0 >> /etc/fstab
+mount /boot/grub
+
+# Install GRUB/Linux/ZFS for UEFI booting:
+apt install --yes grub-efi-arm64 grub-efi-arm64-signed linux-image-generic shim-signed zfs-initramfs
+
+# Configure swap: Choose one of the following options if you want swap:
+# For an unencrypted single-disk install:
+mkswap -f ${DISK}-part2
+echo UUID=$(blkid -s UUID -o value ${DISK}-part2) none swap discard 0 0 >> /etc/fstab
+swapon -a
+
+# Verify that the ZFS boot filesystem is recognized:
+grub-probe /boot
+
+# Refresh the initrd files:
+update-initramfs -c -k all
+
+# Update the boot configuration:
+update-grub
+
+# For UEFI booting, install GRUB to the ESP:
+grub-install --target=arm64-efi --efi-directory=/boot/efi --bootloader-id=ubuntu --recheck --no-floppy
+
+# Fix filesystem mount ordering:
+mkdir /etc/zfs/zfs-list.cache
+touch /etc/zfs/zfs-list.cache/bpool
+touch /etc/zfs/zfs-list.cache/rpool
+ln -s /usr/lib/zfs-linux/zed.d/history_event-zfs-list-cacher.sh /etc/zfs/zed.d
+zed -F &
+
+# Verify that zed updated the cache by making sure these are not empty:
+cat /etc/zfs/zfs-list.cache/bpool
+cat /etc/zfs/zfs-list.cache/rpool
+
+# If either is empty, force a cache update and check again:
+zfs set canmount=noauto bpool/BOOT/ubuntu
+zfs set canmount=noauto rpool/ROOT/ubuntu
+
+# Stop zed:
+fg
+Press Ctrl-C.
+
+# Run these commands in the LiveCD environment to unmount all filesystems:
+mount | grep -v zfs | tac | awk '/\/mnt/ {print $3}' | xargs -i{} umount -lf {}
+zpool export -a
+
+# Do not configure grub during package install
+echo 'grub-pc grub-pc/install_devices_empty select true' | debconf-set-selections
+echo 'grub-pc grub-pc/install_devices select' | debconf-set-selections
+
+export DEBIAN_FRONTEND=noninteractive
+
+# Install various packages needed for a booting system
+apt-get install -y \
+	grub-pc \
+	zfsutils-linux \
+	zfs-initramfs \
+```
+
+```bash
+aws ec2 run-instances --key-name aws_chris_reynolds --instance-type t3.micro --image-id ami-0dba2cb6798deb6d8 \
+    --security-group-ids $(aws ec2 describe-security-groups --group-name database-sg|jq -r '.SecurityGroups[].GroupId') \
+    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1a"|jq -r '.Subnets[].SubnetId') \
+    --block-device-mappings "DeviceName=/dev/sdb,Ebs={DeleteOnTermination=true,VolumeSize=8,VolumeType=gp2}" \
+    --iam-instance-profile Name="db-stack-role" \
+    --credit-specification CpuCredits="unlimited" \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=temp},{Key=Domain,Value=mssux.com}]"
+
+aws ec2 run-instances --key-name aws_chris_reynolds --instance-type t4g.micro --image-id ami-0ea142bd244023692 \
+    --security-group-ids $(aws ec2 describe-security-groups --group-name database-sg|jq -r '.SecurityGroups[].GroupId') \
+    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1a"|jq -r '.Subnets[].SubnetId') \
+    --block-device-mappings "DeviceName=/dev/sdb,Ebs={DeleteOnTermination=true,VolumeSize=8,VolumeType=gp2}" \
+    --iam-instance-profile Name="db-stack-role" \
+    --credit-specification CpuCredits="unlimited" \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=temp},{Key=Domain,Value=mssux.com}]"
+
+# Become root and install needed packages.
+sudo -i
+apt-get update; apt-get install --yes zfsutils-linux
+systemctl stop zed
+
+# Create a variable for the install device.
+DISK=/dev/nvme1n1
+
+# Repartition the disk.
+sgdisk --zap-all $DISK; sgdisk -n1:1M:+512M -t1:EF00 $DISK  # EFI Partition
+sgdisk -n2:0:+1G -t2:BE00 $DISK                             # Boot Pool Partition
+sgdisk -n3:0:0 -t3:BF00 $DISK                               # Root Pool Partition
+
+# Create the boot pool.
+zpool create \
+    -o ashift=12 -d \
+    -o feature@async_destroy=enabled \
+    -o feature@bookmarks=enabled \
+    -o feature@embedded_data=enabled \
+    -o feature@empty_bpobj=enabled \
+    -o feature@enabled_txg=enabled \
+    -o feature@extensible_dataset=enabled \
+    -o feature@filesystem_limits=enabled \
+    -o feature@hole_birth=enabled \
+    -o feature@large_blocks=enabled \
+    -o feature@lz4_compress=enabled \
+    -o feature@spacemap_histogram=enabled \
+    -O acltype=posixacl -O canmount=off -O compression=lz4 \
+    -O devices=off -O normalization=formD -O relatime=on -O xattr=sa \
+    -O mountpoint=/boot -R /mnt \
+    bpool ${DISK}p2
+
+# Create the root pool.
+zpool create \
+    -o ashift=12 -O acltype=posixacl -O canmount=off -O compression=lz4 \
+    -O dnodesize=auto -O normalization=formD -O relatime=on -O xattr=sa \
+    -O mountpoint=/ -R /mnt rpool ${DISK}p3
+
+# Create filesystem datasets to act as containers:
+zfs create -o canmount=off -o mountpoint=none rpool/ROOT
+zfs create -o canmount=off -o mountpoint=none bpool/BOOT
+
+# Create filesystem datasets for the root and boot filesystems:
+UUID=$(dd if=/dev/urandom of=/dev/stdout bs=1 count=100 2>/dev/null |
+    tr -dc 'a-z0-9' | cut -c-6)
+
+zfs create -o canmount=noauto -o mountpoint=/ -o com.ubuntu.zsys:bootfs=yes \
+    -o com.ubuntu.zsys:last-used=$(date +%s) rpool/ROOT/ubuntu_$UUID
+zfs mount rpool/ROOT/ubuntu_$UUID
+
+zfs create -o canmount=noauto -o mountpoint=/boot bpool/BOOT/ubuntu_$UUID
+zfs mount bpool/BOOT/ubuntu_$UUID
+
+# Copy the filesystem.
+rsync -axHAWXS --numeric-ids --info=progress2 / /mnt/
+
+# Chroot to the new filesystem.
+cd /mnt/boot
+mount --bind /boot/efi efi
+cd ..
+mount --bind /dev dev
+mount --bind /proc proc
+mount --bind /sys sys
+mount --bind /run run
+chroot /mnt /usr/bin/env DISK=$DISK UUID=$UUID bash --login
+
+# Install GRUB
+update-grub
+grub-install $DISK
+exit
+
+# Run these commands in the LiveCD environment to unmount all filesystems:
+zpool export -a
+
+sda - vol-047a8c8c8e5902d81 - SNAP - snap-0753b13a85ff41fc6
+sdb - vol-0d997acccae8302a3 - SNAP - snap-022c2a9925eaaedfd
+
+
+aws ec2 run-instances --key-name aws_chris_reynolds --instance-type c6gd.medium --image-id ami-0ea142bd244023692 \
+    --security-group-ids $(aws ec2 describe-security-groups --group-name database-sg|jq -r '.SecurityGroups[].GroupId') \
+    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1a"|jq -r '.Subnets[].SubnetId') \
+    --iam-instance-profile Name="db-stack-role" \
+    --credit-specification CpuCredits="unlimited" \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=moho},{Key=Domain,Value=mssux.com}]"
+
+aws ec2 run-instances --key-name aws_chris_reynolds --instance-type t3.micro --image-id ami-0b02c5feef29d5c60 \
+    --security-group-ids $(aws ec2 describe-security-groups --group-name database-sg|jq -r '.SecurityGroups[].GroupId') \
+    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1b"|jq -r '.Subnets[].SubnetId') \
+    --block-device-mappings "DeviceName=/dev/sda,Ebs={DeleteOnTermination=true,VolumeSize=10,VolumeType=gp2}" \
+        "DeviceName=/dev/sdb,Ebs={DeleteOnTermination=true,VolumeSize=10,VolumeType=gp2}" \
+        "DeviceName=/dev/sdc,Ebs={DeleteOnTermination=true,VolumeSize=10,VolumeType=gp2}" \
+    --iam-instance-profile Name="db-stack-role" \
+    --credit-specification CpuCredits="unlimited" \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=eve},{Key=Domain,Value=mssux.com}]"
+
+aws ec2 run-instances --key-name aws_chris_reynolds --instance-type t3.small --image-id ami-0b02c5feef29d5c60 \
+    --security-group-ids $(aws ec2 describe-security-groups --group-name database-sg|jq -r '.SecurityGroups[].GroupId') \
+    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1c"|jq -r '.Subnets[].SubnetId') \
+    --block-device-mappings "DeviceName=/dev/sdb,Ebs={DeleteOnTermination=true,VolumeSize=10,VolumeType=gp2}" \
+    --iam-instance-profile Name="db-stack-role" \
+    --credit-specification CpuCredits="unlimited" \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=kerbin},{Key=Domain,Value=mssux.com}]"
+
+aws ec2 run-instances --key-name aws_chris_reynolds --instance-type t4g.micro --image-id ami-00bae8092a688e69e \
+    --security-group-ids $(aws ec2 describe-security-groups --group-name database-sg|jq -r '.SecurityGroups[].GroupId') \
+    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1a"|jq -r '.Subnets[].SubnetId') \
+    --block-device-mappings "DeviceName=/dev/sdb,Ebs={DeleteOnTermination=true,VolumeSize=1,VolumeType=gp2}" \
+    --iam-instance-profile Name="db-stack-role" \
+    --credit-specification CpuCredits="unlimited" \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=temp},{Key=Domain,Value=mssux.com}]"
