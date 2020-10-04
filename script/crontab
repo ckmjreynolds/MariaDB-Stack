@@ -22,3 +22,4 @@
 # 
 # m h  dom mon dow   command
 @reboot /usr/local/bin/registerRoute53.sh
+@reboot /bin/sh /home/ubuntu/MariaDB-Stack/script/mounts3.sh

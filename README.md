@@ -1,28 +1,168 @@
 # MariaDB-Stack
-A simplified, reference implementation of a database stack consisting of a three-node Galera cluster running MariaDB, two ProxySQL instances to provide load balancing, and PMM to provide monitoring.
-
 ## Example Deployment (AWS)
-The example deployment utilizes six AWS EC2 instances. The sample configuration is as small as possible and not practical for production loads.
-
 ### Instances
-| Hostname  | Instance Type     | Availability Zone | Operating System      | Description              |
-| :-------- | :---------------- | :---------------- |:--------------------- | :----------------------- |
-| `monitor` | `t3.small 2GB`    | `us-east-1c`      | `Ubuntu 20.04.01 LTS` | `PMM Monitoring`         |
-| `db1`     | `c6gd.medium 2GB` | `us-east-1a`      | `Ubuntu 20.04.01 LTS` | `Galera Node #1`         |
-| `db2`     | `c6gd.medium 2GB` | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | `Galera Node #2`         |
-| `db3`     | `c6gd.medium 2GB` | `us-east-1c`      | `Ubuntu 20.04.01 LTS` | `Galera Node #3`         |
+| Hostname    | Instance Type   | Availability Zone | Operating System      | Description        |
+| :---------- | :-------------- | :---------------- |:--------------------- | :----------------- |
+| `monitor`   | `t3.small 2GB`  | `us-east-1c`      | `Ubuntu 20.04.01 LTS` | `PMM Monitoring`   |
+| `db1`       | `t4g.micro 1GB` | `us-east-1a`      | `Ubuntu 20.04.01 LTS` | `Galera Node #1`   |
+| `db2`       | `t4g.micro 1GB` | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | `Galera Node #2`   |
+| `db3`       | `t4g.micro 1GB` | `us-east-1c`      | `Ubuntu 20.04.01 LTS` | `Galera Node #3`   |
+| `proxysql1` | `t3.nano 0.5GB` | `us-east-1a`      | `Ubuntu 20.04.01 LTS` | `ProxySQL Node #1` |
+| `proxysql2` | `t3.nano 0.5GB` | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | `ProxySQL Node #2` |
 
-## 1. Setup Network
-### Create Default VPC
-This is only needed if the default VPC was deleted.
-
+## 1. Create Security Groups
 ```bash
-aws ec2 create-default-vpc
-aws ec2 create-tags --resources $(aws ec2 describe-vpcs --filters "Name=isDefault,Values=true"|jq -r '.Vpcs[].VpcId') --tags "Key=Name,Value=default"
+# Get my IP address to setup Administration Ingress
+IP=$(dig +short myip.opendns.com @resolver1.opendns.com)
+
+# Database Monitoring Security Group
+aws ec2 create-security-group --group-name db-monitor-sg --description "Database Monitor Security Group" \
+    --tag-specifications "ResourceType=security-group,Tags={Key=Name,Value=db-monitor-sg}"
+
+aws ec2 authorize-security-group-ingress --group-name db-monitor-sg --ip-permissions \
+    IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges='[{CidrIp='${IP}'/32,Description="SSH for Administration."}]' \
+    IpProtocol=tcp,FromPort=443,ToPort=443,IpRanges='[{CidrIp='${IP}'/32,Description="HTTPS for Administration."}]' \
+    IpProtocol=tcp,FromPort=443,ToPort=443,IpRanges='[{CidrIp=172.31.0.0/16,Description="HTTPS for Monitoring."}]'
+
+# Database Security Group
+aws ec2 create-security-group --group-name db-database-sg --description "Database Security Group" \
+    --tag-specifications "ResourceType=security-group,Tags={Key=Name,Value=db-database-sg}"
+
+aws ec2 authorize-security-group-ingress --group-name db-database-sg --ip-permissions \
+    IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges='[{CidrIp='${IP}'/32,Description="SSH for Administration."}]' \
+    IpProtocol=tcp,FromPort=3306,ToPort=3306,IpRanges='[{CidrIp='${IP}'/32,Description="MySQL for Administration."}]' \
+    IpProtocol=tcp,FromPort=3306,ToPort=3306,IpRanges='[{CidrIp=172.31.0.0/16,Description="MySQL for Application."}]'
+
+# Database ProxySQL Security Group
+aws ec2 create-security-group --group-name db-proxysql-sg --description "Database ProxySQL Security Group" \
+    --tag-specifications "ResourceType=security-group,Tags={Key=Name,Value=db-proxysql-sg}"
+
+aws ec2 authorize-security-group-ingress --group-name db-proxysql-sg --ip-permissions \
+    IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges='[{CidrIp='${IP}'/32,Description="SSH for Administration."}]' \
+    IpProtocol=tcp,FromPort=6032,ToPort=6032,IpRanges='[{CidrIp='${IP}'/32,Description="ProxySQL Admin for Administration."}]' \
+    IpProtocol=tcp,FromPort=6033,ToPort=6033,IpRanges='[{CidrIp='${IP}'/32,Description="ProxySQL for Administration."}]' \
+    IpProtocol=tcp,FromPort=6033,ToPort=6033,IpRanges='[{CidrIp=172.31.0.0/16,Description="ProxySQL for Application."}]'
 ```
 
-### Create Security Group
+## 2. Create s3 Bucket for Backups
 ```bash
+BUCKET=$(aws sts get-caller-identity|jq -r '.Account')-db-backups
+aws s3api create-bucket --bucket ${BUCKET} --acl private
+```
+
+## 3. Create the IAM Policy/Role `db-stack-policy`/`db-stack-role`
+```bash
+# Note: The policy allows access to the s3 bucket as well as the ability to update DNS records.
+export BUCKET=$(aws sts get-caller-identity|jq -r '.Account')-db-backups
+export ZONEID=<Your hosted zone ID>
+envsubst < ./script/IAM_policy.template > ./script/IAM_policy.json
+aws iam create-policy --policy-name db-stack-policy --policy-document file://./script/IAM_policy.json
+rm ./script/IAM_policy.json
+
+# Create a role with the given policy.
+aws iam create-role --role-name db-stack-role --assume-role-policy-document file://./script/trust.json
+aws iam attach-role-policy --role-name db-stack-role \
+    --policy-arn arn:aws:iam::$(aws sts get-caller-identity|jq -r '.Account'):policy/db-stack-policy
+```
+
+## 4. Create AMIs for Ubuntu 20.04 LTS - 64-bit x86 and 64-bit Arm
+```bash
+# Ubuntu Server 20.04 LTS (HVM), SSD Volume Type - ami-0dba2cb6798deb6d8 (64-bit x86) / ami-0ea142bd244023692 (64-bit Arm)
+aws ec2 run-instances --key-name <ssh_key> --instance-type t3.nano --image-id ami-0dba2cb6798deb6d8
+aws ec2 run-instances --key-name <ssh_key> --instance-type t4g.nano --image-id ami-0ea142bd244023692
+
+# Complete these steps for each platform and then create AMIs.
+# Set the TimeZone
+sudo timedatectl set-timezone America/Chicago
+
+# Install packages.
+sudo apt-get update; sudo apt-get install --yes screen zfsutils-linux s3fs cloud-utils ec2-api-tools
+
+# Install cli53.
+sudo wget -O /usr/local/bin/cli53 https://github.com/barnybug/cli53/releases/download/0.8.17/cli53-linux-amd64
+# OR
+sudo wget -O /usr/local/bin/cli53 https://github.com/barnybug/cli53/releases/download/0.8.17/cli53-linux-arm64
+sudo chmod +x /usr/local/bin/cli53
+
+# Install registerRoute53.sh script.
+sudo wget -O /usr/local/bin/registerRoute53.sh https://raw.githubusercontent.com/ckmjreynolds/MariaDB-Stack/0.1.4/script/registerRoute53.sh
+sudo chmod +x /usr/local/bin/registerRoute53.sh
+
+# Install S3 File System (for backups)
+sudo apt-get install s3fs
+sudo -i
+mkdir /mnt/backup
+echo 's3fs#mssux-backups /mnt/backup fuse _netdev,allow_other,iam_role=auto,storage_class=intelligent_tiering 0 0' >> /etc/fstab
+reboot
+
+# Schedule the script to run on reboot.
+(wget -O - https://raw.githubusercontent.com/ckmjreynolds/MariaDB-Stack/0.1.4/script/crontab)| crontab -
+
+# Reboot the server and verify DNS entry is added/updated.
+sudo reboot
+```
+
+# Ubuntu Server 20.04 LTS (HVM), SSD Volume Type - ami-0dba2cb6798deb6d8 (64-bit x86) / ami-0ea142bd244023692 (64-bit Arm)
+
+## X. Clone the Repository
+```bash
+git clone --single-branch --branch 0.1.4 https://github.com/ckmjreynolds/MariaDB-Stack.git
+cd MariaDB-Stack
+```
+
+## X. Cleanup
+```bash
+# Remove the Policy from the Role
+aws iam detach-role-policy --role-name db-stack-role \
+    --policy-arn arn:aws:iam::$(aws sts get-caller-identity|jq -r '.Account'):policy/db-stack-policy
+
+# Remove Role
+aws iam delete-role --role-name db-stack-role
+
+# Remove IAM Policy
+aws iam delete-policy --policy-arn arn:aws:iam::$(aws sts get-caller-identity|jq -r '.Account'):policy/db-stack-policy
+
+# Remove the s3 Bucket
+BUCKET=$(aws sts get-caller-identity|jq -r '.Account')-db-backups
+aws s3api delete-bucket --bucket ${BUCKET}
+
+# Remove db-proxysql-sg Security Group
+SG=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=db-proxysql-sg"|jq -r '.SecurityGroups[].GroupId')
+aws ec2 delete-security-group --group-id ${SG}
+
+# Remove db-database-sg Security Group
+SG=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=db-database-sg"|jq -r '.SecurityGroups[].GroupId')
+aws ec2 delete-security-group --group-id ${SG}
+
+# Remove db-monitor-sg Security Group
+SG=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=db-monitor-sg"|jq -r '.SecurityGroups[].GroupId')
+aws ec2 delete-security-group --group-id ${SG}
+```
+
+## X. Default VPC Create/Delete
+```bash
+# *********************************************************************************************************************
+# Note: This is only needed if the Default VPC was deleted, which is unusual.
+# *********************************************************************************************************************
+aws ec2 create-default-vpc; VPC=$(aws ec2 describe-vpcs --filters "Name=isDefault,Values=true"|jq -r '.Vpcs[].VpcId')
+aws ec2 create-tags --tags "Key=Name,Value=default" --resources ${VPC}
+SG=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=default"|jq -r '.SecurityGroups[].GroupId')
+aws ec2 create-tags --tags "Key=Name,Value=default" --resources ${SG}
+
+# *********************************************************************************************************************
+# NOTE: You normally DO NOT want to perform these cleanup steps!
+# *********************************************************************************************************************
+./script/delete-default-vpc.sh
+```
+
+
+
+
+
+
+### Create Security Group for `monitor`
+```bash
+```
 aws ec2 create-security-group --group-name database-sg --description "Database Security Group" --tag-specifications "ResourceType=security-group,Tags={Key=Name,Value=database-sg}"
 
 aws ec2 authorize-security-group-ingress --group-name database-sg \
@@ -180,7 +320,7 @@ docker restart pmm-server
 ## 4. Create the `db1` EC2 Instance
 ```bash
 # Ubuntu 20.04.1 LTS aarch64 (includes 3.1 below) - ami-00bae8092a688e69e
-aws ec2 run-instances --key-name aws_chris_reynolds --instance-type c6gd.medium --image-id ami-00bae8092a688e69e \
+aws ec2 run-instances --key-name aws_chris_reynolds --instance-type t4g.micro --image-id ami-00bae8092a688e69e \
     --security-group-ids $(aws ec2 describe-security-groups --group-name database-sg|jq -r '.SecurityGroups[].GroupId') \
     --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1a"|jq -r '.Subnets[].SubnetId') \
     --iam-instance-profile Name="db-stack-role" \
@@ -211,7 +351,8 @@ echo 's3fs#mssux-backups /mnt/backup fuse _netdev,allow_other,iam_role=auto,stor
 reboot
 
 # Setup backups.
-sudo wget -O /home/mysql https://raw.githubusercontent.com/ckmjreynolds/MariaDB-Stack/0.1.4/script/backup.sh
+sudo mkdir /home/mysql
+sudo wget -O /home/mysql/backup.sh https://raw.githubusercontent.com/ckmjreynolds/MariaDB-Stack/0.1.4/script/backup.sh
 sudo wget -O /home/mysql/.my.cnf https://raw.githubusercontent.com/ckmjreynolds/MariaDB-Stack/0.1.4/script/.my.cnf
 sudo chown -R mysql:mysql /home/mysql
 # Stop and disable MariaDB for now.
@@ -928,7 +1069,7 @@ sda - vol-047a8c8c8e5902d81 - SNAP - snap-0753b13a85ff41fc6
 sdb - vol-0d997acccae8302a3 - SNAP - snap-022c2a9925eaaedfd
 
 
-aws ec2 run-instances --key-name aws_chris_reynolds --instance-type c6gd.medium --image-id ami-0ea142bd244023692 \
+aws ec2 run-instances --key-name aws_chris_reynolds --instance-type t4g.micro --image-id ami-0ea142bd244023692 \
     --security-group-ids $(aws ec2 describe-security-groups --group-name database-sg|jq -r '.SecurityGroups[].GroupId') \
     --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1a"|jq -r '.Subnets[].SubnetId') \
     --iam-instance-profile Name="db-stack-role" \
