@@ -21,5 +21,3 @@
 # For more information see the manual pages of crontab(5) and cron(8)
 # 
 # m h  dom mon dow   command
-@reboot /usr/local/bin/registerRoute53.sh
-@reboot /bin/sh /home/ubuntu/MariaDB-Stack/script/mounts3.sh

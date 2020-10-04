@@ -10,7 +10,13 @@
 | `proxysql1` | `t3.nano 0.5GB` | `us-east-1a`      | `Ubuntu 20.04.01 LTS` | `ProxySQL Node #1` |
 | `proxysql2` | `t3.nano 0.5GB` | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | `ProxySQL Node #2` |
 
-## 1. Create Security Groups
+## 1. Clone this Repository
+```bash
+git clone --single-branch --branch 0.1.4 https://github.com/ckmjreynolds/MariaDB-Stack.git
+cd MariaDB-Stack
+```
+
+## 2. Create Security Groups
 ```bash
 # Get my IP address to setup Administration Ingress
 IP=$(dig +short myip.opendns.com @resolver1.opendns.com)
@@ -44,13 +50,13 @@ aws ec2 authorize-security-group-ingress --group-name db-proxysql-sg --ip-permis
     IpProtocol=tcp,FromPort=6033,ToPort=6033,IpRanges='[{CidrIp=172.31.0.0/16,Description="ProxySQL for Application."}]'
 ```
 
-## 2. Create s3 Bucket for Backups
+## 3. Create s3 Bucket for Backups
 ```bash
 BUCKET=$(aws sts get-caller-identity|jq -r '.Account')-db-backups
 aws s3api create-bucket --bucket ${BUCKET} --acl private
 ```
 
-## 3. Create the IAM Policy/Role `db-stack-policy`/`db-stack-role`
+## 4. Create the IAM Policy/Role `db-stack-policy`/`db-stack-role`/`db-stack-profile`
 ```bash
 # Note: The policy allows access to the s3 bucket as well as the ability to update DNS records.
 export BUCKET=$(aws sts get-caller-identity|jq -r '.Account')-db-backups
@@ -63,15 +69,34 @@ rm ./script/IAM_policy.json
 aws iam create-role --role-name db-stack-role --assume-role-policy-document file://./script/trust.json
 aws iam attach-role-policy --role-name db-stack-role \
     --policy-arn arn:aws:iam::$(aws sts get-caller-identity|jq -r '.Account'):policy/db-stack-policy
+
+# Create an instance profile with the given role.
+aws iam create-instance-profile --instance-profile-name db-stack-profile
+aws iam add-role-to-instance-profile --instance-profile-name db-stack-profile --role-name db-stack-role
 ```
 
-## 4. Create AMIs for Ubuntu 20.04 LTS - 64-bit x86 and 64-bit Arm
+## 5. Create AMIs for Ubuntu 20.04 LTS - 64-bit x86 and 64-bit Arm
 ```bash
 # Ubuntu Server 20.04 LTS (HVM), SSD Volume Type - ami-0dba2cb6798deb6d8 (64-bit x86) / ami-0ea142bd244023692 (64-bit Arm)
-aws ec2 run-instances --key-name <ssh_key> --instance-type t3.nano --image-id ami-0dba2cb6798deb6d8
-aws ec2 run-instances --key-name <ssh_key> --instance-type t4g.nano --image-id ami-0ea142bd244023692
+aws ec2 run-instances --key-name <ssh_key> --instance-type t3.nano --image-id ami-0dba2cb6798deb6d8 \
+    --security-group-ids $(aws ec2 describe-security-groups --group-name db-database-sg|jq -r '.SecurityGroups[].GroupId') \
+    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1a"|jq -r '.Subnets[].SubnetId') \
+    --iam-instance-profile Name="db-stack-profile" \
+    --credit-specification CpuCredits="unlimited" \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=amd64},{Key=Domain,Value=<domain>}]"
+
+# Ubuntu Server 20.04 LTS arm64 - ami-0e9f3a26099cdb584
+aws ec2 run-instances --key-name <ssh_key> --instance-type t4g.nano --image-id ami-0ea142bd244023692 \
+    --security-group-ids $(aws ec2 describe-security-groups --group-name db-database-sg|jq -r '.SecurityGroups[].GroupId') \
+    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1a"|jq -r '.Subnets[].SubnetId') \
+    --iam-instance-profile Name="db-stack-profile" \
+    --credit-specification CpuCredits="unlimited" \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=arm64},{Key=Domain,Value=<domain>}]"
 
 # Complete these steps for each platform and then create AMIs.
+git clone --single-branch --branch 0.1.4 https://github.com/ckmjreynolds/MariaDB-Stack.git
+cd MariaDB-Stack
+
 # Set the TimeZone
 sudo timedatectl set-timezone America/Chicago
 
@@ -88,18 +113,23 @@ sudo chmod +x /usr/local/bin/cli53
 sudo wget -O /usr/local/bin/registerRoute53.sh https://raw.githubusercontent.com/ckmjreynolds/MariaDB-Stack/0.1.4/script/registerRoute53.sh
 sudo chmod +x /usr/local/bin/registerRoute53.sh
 
+# Schedule the script to run on reboot.
+(wget -O - https://raw.githubusercontent.com/ckmjreynolds/MariaDB-Stack/0.1.4/script/crontab)| sudo crontab -
+(sudo crontab -l; echo "@reboot /usr/local/bin/registerRoute53.sh")| sudo crontab -
+
 # Install S3 File System (for backups)
-sudo apt-get install s3fs
 sudo -i
 mkdir /mnt/backup
-echo 's3fs#mssux-backups /mnt/backup fuse _netdev,allow_other,iam_role=auto,storage_class=intelligent_tiering 0 0' >> /etc/fstab
+echo 's3fs#849647503614-db-backups /mnt/backup fuse _netdev,allow_other,iam_role=auto,storage_class=intelligent_tiering 0 0' >> /etc/fstab
+
+# Reboot the server and verify DNS entry is added/updated and s3 bucket mounted.
 reboot
 
-# Schedule the script to run on reboot.
-(wget -O - https://raw.githubusercontent.com/ckmjreynolds/MariaDB-Stack/0.1.4/script/crontab)| crontab -
-
-# Reboot the server and verify DNS entry is added/updated.
-sudo reboot
+# If everything is working, patch the server, shutdown and create an AMI.
+sudo apt-get update
+sudo apt-get upgrade --with-new-pkgs
+sudo apt-get clean
+sudo shutdown now
 ```
 
 # Ubuntu Server 20.04 LTS (HVM), SSD Volume Type - ami-0dba2cb6798deb6d8 (64-bit x86) / ami-0ea142bd244023692 (64-bit Arm)
@@ -112,6 +142,12 @@ cd MariaDB-Stack
 
 ## X. Cleanup
 ```bash
+# Remove the Role from the Profile
+aws iam remove-role-from-instance-profile --instance-profile-name db-stack-profile --role-name db-stack-role
+
+# Delete the Profile
+aws iam delete-instance-profile --instance-profile-name db-stack-profile
+
 # Remove the Policy from the Role
 aws iam detach-role-policy --role-name db-stack-role \
     --policy-arn arn:aws:iam::$(aws sts get-caller-identity|jq -r '.Account'):policy/db-stack-policy
