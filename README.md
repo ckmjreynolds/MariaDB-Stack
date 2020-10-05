@@ -78,6 +78,7 @@ aws iam add-role-to-instance-profile --instance-profile-name db-stack-profile --
 ## 5. Create AMIs for Ubuntu 20.04 LTS - 64-bit x86 and 64-bit Arm
 ```bash
 # Ubuntu Server 20.04 LTS (HVM), SSD Volume Type - ami-0dba2cb6798deb6d8 (64-bit x86) / ami-0ea142bd244023692 (64-bit Arm)
+# Ubuntu Server 20.04 LTS amd64 - ami-06237a734a732987c
 aws ec2 run-instances --key-name <ssh_key> --instance-type t3.nano --image-id ami-0dba2cb6798deb6d8 \
     --security-group-ids $(aws ec2 describe-security-groups --group-name db-database-sg|jq -r '.SecurityGroups[].GroupId') \
     --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1a"|jq -r '.Subnets[].SubnetId') \
@@ -120,7 +121,7 @@ sudo chmod +x /usr/local/bin/registerRoute53.sh
 # Install S3 File System (for backups)
 sudo -i
 mkdir /mnt/backup
-echo 's3fs#849647503614-db-backups /mnt/backup fuse _netdev,allow_other,iam_role=auto,storage_class=intelligent_tiering 0 0' >> /etc/fstab
+echo 's3fs#<bucket> /mnt/backup fuse _netdev,allow_other,iam_role=auto,storage_class=intelligent_tiering 0 0' >> /etc/fstab
 
 # Reboot the server and verify DNS entry is added/updated and s3 bucket mounted.
 reboot
@@ -130,18 +131,152 @@ sudo apt-get update
 sudo apt-get upgrade --with-new-pkgs
 sudo apt-get clean
 sudo shutdown now
+
+# Terminate the instances.
+AMD64=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=amd64"|jq -r '.Reservations[].Instances[].InstanceId')
+ARM64=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=arm64"|jq -r '.Reservations[].Instances[].InstanceId')
+aws ec2 terminate-instances --instance-ids ${AMD64} ${ARM64}
 ```
 
-# Ubuntu Server 20.04 LTS (HVM), SSD Volume Type - ami-0dba2cb6798deb6d8 (64-bit x86) / ami-0ea142bd244023692 (64-bit Arm)
-
-## X. Clone the Repository
+## 6. Create the `monitor` EC2 Instance
 ```bash
-git clone --single-branch --branch 0.1.4 https://github.com/ckmjreynolds/MariaDB-Stack.git
-cd MariaDB-Stack
+# Ubuntu Server 20.04 LTS amd64 - ami-06237a734a732987c
+aws ec2 run-instances --key-name <ssh_key> --instance-type t3.small --image-id ami-06237a734a732987c \
+    --security-group-ids $(aws ec2 describe-security-groups --group-name db-monitor-sg|jq -r '.SecurityGroups[].GroupId') \
+    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1c"|jq -r '.Subnets[].SubnetId') \
+    --block-device-mappings "DeviceName=/dev/sdb,Ebs={DeleteOnTermination=true,VolumeSize=10,VolumeType=gp2}" \
+    --iam-instance-profile Name="db-stack-profile" \
+    --credit-specification CpuCredits="unlimited" \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=monitor},{Key=Domain,Value=<domain>}]"
+```
+
+### 6.1 Setup Docker
+```bash
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+sudo usermod -aG docker $USER
+rm get-docker.sh
+```
+
+### [6.2 Move Docker to ZFS](https://docs.docker.com/storage/storagedriver/zfs-driver/)
+```bash
+sudo systemctl stop docker
+sudo rm -rf /var/lib/docker
+sudo zpool create -o ashift=12 -o autoexpand=on -O relatime=on -O compression=lz4 -f zpool-docker -m /var/lib/docker /dev/nvme1n1
+sudo wget -O /etc/docker/daemon.json https://raw.githubusercontent.com/ckmjreynolds/MariaDB-Stack/0.1.4/script/docker_daemon.json
+sudo systemctl start docker
+sudo docker info|grep zfs
+```
+
+### [6.3 Setup PMM](https://www.percona.com/doc/percona-monitoring-and-management/2.x/install/docker.html)
+```bash
+# Pull the latest 2.x image
+docker pull percona/pmm-server:2
+
+# Create a persistent data container.
+docker create --volume /srv --name pmm-data percona/pmm-server:2 /bin/true
+
+# Run the image to start PMM Server.
+docker run --detach --restart always --publish 443:443 --volumes-from pmm-data --name pmm-server percona/pmm-server:2
+```
+
+### [6.4 Setup SSL Encryption](https://hub.docker.com/r/certbot/dns-route53)
+```bash
+# Get SSL certificates.
+docker run -it --rm --name certbot -v "/etc/letsencrypt:/etc/letsencrypt" \
+    -v "/var/lib/letsencrypt:/var/lib/letsencrypt" certbot/dns-route53 \
+    certonly --dns-route53 -d monitor.<domain>
+
+# Copy the SSL certificates.
+sudo -i
+cp -L /etc/letsencrypt/live/monitor.<domain>/*.pem /home/ubuntu/.
+chown ubuntu:ubuntu /home/ubuntu/*.pem
+docker cp /home/ubuntu/fullchain.pem pmm-server:/srv/nginx/certificate.crt
+docker cp /home/ubuntu/privkey.pem pmm-server:/srv/nginx/certificate.key
+docker cp /home/ubuntu/chain.pem pmm-server:/srv/nginx/ca-certs.pem
+
+# Restart pmm-server.
+docker restart pmm-server
+```
+
+## 7. Create the Galera Nodes
+```bash
+# Ubuntu Server 20.04 LTS arm64 - ami-0e9f3a26099cdb584
+aws ec2 run-instances --key-name <ssh_key> --instance-type t4g.micro --image-id ami-0e9f3a26099cdb584 \
+    --security-group-ids $(aws ec2 describe-security-groups --group-name db-database-sg|jq -r '.SecurityGroups[].GroupId') \
+    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1a"|jq -r '.Subnets[].SubnetId') \
+    --block-device-mappings "DeviceName=/dev/sdb,Ebs={DeleteOnTermination=true,VolumeSize=10,VolumeType=gp2}" \
+    --iam-instance-profile Name="db-stack-profile" \
+    --credit-specification CpuCredits="unlimited" \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=db1},{Key=Domain,Value=<domain>}]"
+
+aws ec2 run-instances --key-name <ssh_key> --instance-type t4g.micro --image-id ami-0e9f3a26099cdb584 \
+    --security-group-ids $(aws ec2 describe-security-groups --group-name db-database-sg|jq -r '.SecurityGroups[].GroupId') \
+    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1b"|jq -r '.Subnets[].SubnetId') \
+    --block-device-mappings "DeviceName=/dev/sdb,Ebs={DeleteOnTermination=true,VolumeSize=10,VolumeType=gp2}" \
+    --iam-instance-profile Name="db-stack-profile" \
+    --credit-specification CpuCredits="unlimited" \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=db2},{Key=Domain,Value=<domain>}]"
+
+aws ec2 run-instances --key-name <ssh_key> --instance-type t4g.micro --image-id ami-0e9f3a26099cdb584 \
+    --security-group-ids $(aws ec2 describe-security-groups --group-name db-database-sg|jq -r '.SecurityGroups[].GroupId') \
+    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1c"|jq -r '.Subnets[].SubnetId') \
+    --block-device-mappings "DeviceName=/dev/sdb,Ebs={DeleteOnTermination=true,VolumeSize=10,VolumeType=gp2}" \
+    --iam-instance-profile Name="db-stack-profile" \
+    --credit-specification CpuCredits="unlimited" \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=db3},{Key=Domain,Value=<domain>}]"
+
+# Repeat these steps for each of the three Galera nodes.
+# Create the zpool for MariaDB
+sudo zpool create -O relatime=on -O compression=lz4 -O logbias=throughput -O primarycache=metadata -O recordsize=16k \
+    -O xattr=sa -o ashift=12 -o autoexpand=on -f zpool-mysql -m /var/lib/mysql /dev/nvme1n1
+
+# Setup Repository
+curl -LsS https://downloads.mariadb.com/MariaDB/mariadb_repo_setup | sudo bash -s -- --skip-maxscale --skip-tools
+
+# Install MariaDB
+sudo apt-get install --yes mariadb-server galera-4 mariadb-client libmariadb3 mariadb-backup mariadb-common
+sudo mysql_secure_installation
+
+# Setup Users
+MariaDB-Stack/script/configureUsers.sh <mariabackup password> <pmm password> <proxysql password> <repl password>
+sudo mysql
+MariaDB [(none)]> SOURCE MariaDB-Stack/initdb.d/001_CREATE_USERS.sql
+MariaDB [(none)]> exit
+
+# Stop and disable MariaDB for now.
+sudo systemctl stop mariadb
+sudo systemctl disable mariadb
+
+# Setup this Node
+MariaDB-Stack/script/configureNode.sh <node>.<domain> <gtid_domain_id> <auto_increment_offset> \
+    "gcomm://db1.<domain>,db2.<domain>,db3.<domain>" <server_id> <wsrep_gtid_domain_id> "mariabackup password"
+
+# Install PMM Client
+# https://www.percona.com/doc/percona-server/LATEST/installation/apt_repo.html
+wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
+sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
+sudo apt-get update
+sudo apt-get install pmm2-client
+
+# Bootstrap (on db1) or start (on db2, db3) mariadb.
+sudo systemctl enable mariadb
+sudo galera_new_cluster
+
+# Setup Monitoring
+sudo pmm-admin config --server-url=https://admin:<password>@monitor.<domain>:443
+pmm-admin add mysql --username=pmm --password=<password> --query-source=perfschema <node>.<domain>:3306
 ```
 
 ## X. Cleanup
 ```bash
+# Cleanup Instances
+INSTANCE4=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=db3"|jq -r '.Reservations[].Instances[].InstanceId')
+INSTANCE3=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=db2"|jq -r '.Reservations[].Instances[].InstanceId')
+INSTANCE2=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=db1"|jq -r '.Reservations[].Instances[].InstanceId')
+INSTANCE1=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=monitor"|jq -r '.Reservations[].Instances[].InstanceId')
+aws ec2 terminate-instances --instance-ids ${INSTANCE1} ${INSTANCE2} ${INSTANCE3} ${INSTANCE4}
+
 # Remove the Role from the Profile
 aws iam remove-role-from-instance-profile --instance-profile-name db-stack-profile --role-name db-stack-role
 
@@ -191,176 +326,14 @@ aws ec2 create-tags --tags "Key=Name,Value=default" --resources ${SG}
 ./script/delete-default-vpc.sh
 ```
 
-
-
-
-
-
-### Create Security Group for `monitor`
-```bash
-```
-aws ec2 create-security-group --group-name database-sg --description "Database Security Group" --tag-specifications "ResourceType=security-group,Tags={Key=Name,Value=database-sg}"
-
-aws ec2 authorize-security-group-ingress --group-name database-sg \
-    --ip-permissions IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges='[{CidrIp='$(dig +short myip.opendns.com @resolver1.opendns.com)'/32,Description="SSH for Administration."}]'
-
-aws ec2 authorize-security-group-ingress --group-name database-sg \
-    --ip-permissions IpProtocol=tcp,FromPort=443,ToPort=443,IpRanges='[{CidrIp='$(dig +short myip.opendns.com @resolver1.opendns.com)'/32,Description="HTTPS for Administration."}]'
-```
-
-## 2. Create the IAM Policy and Role `db-stack` / `db-stack-role`
-```JSON
-{
-    "Version": "2012-10-17",
-    "Statement":[
-        {
-            "Effect": "Allow",
-            "Action": "ec2:Describe*",
-            "Resource": "*"
-        },
-        {
-            "Effect": "Allow",
-            "Action": ["s3:GetBucketLocation","s3:ListAllMyBuckets"],
-            "Resource": "arn:aws:s3:::*"
-        },
-        {
-            "Effect": "Allow",
-            "Action": ["s3:ListBucket"],
-            "Resource": ["arn:aws:s3:::mssux-backups"]
-        },
-        {
-            "Effect": "Allow",
-            "Action": ["s3:PutObject","s3:GetObject","s3:DeleteObject"],
-            "Resource": ["arn:aws:s3:::mssux-backups/*"]
-        },
-        {
-             "Action":[
-                "route53:ChangeResourceRecordSets",
-                "route53:GetHostedZone",
-                "route53:ListResourceRecordSets"
-            ],
-            "Effect":"Allow",
-            "Resource":[
-            "arn:aws:route53:::hostedzone/<Your zone ID>"
-            ]
-        },
-        {
-            "Action":[
-                "route53:GetChange",
-                "route53:ListHostedZones",
-                "route53:ListHostedZonesByName"
-            ],
-            "Effect":"Allow",
-            "Resource":[
-            "*"
-            ]
-        },
-    ]
-}
-```
-
-```
-# Ubuntu Server 20.04 LTS (HVM), SSD Volume Type - ami-0dba2cb6798deb6d8 (64-bit x86) / ami-0ea142bd244023692 (64-bit Arm)
-# Ubuntu 20.04.1 LTS aarch64 (includes 3.1 below) - ami-00bae8092a688e69e
-# sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder
-```
-
-## 3. Create the `monitor` EC2 Instance
-```bash
-# Ubuntu 20.04.1 LTS x86_64 (includes 3.1 below) - ami-0813f39f84cc21ebf
-aws ec2 run-instances --key-name aws_chris_reynolds --instance-type t3.small --image-id ami-0813f39f84cc21ebf \
-    --security-group-ids $(aws ec2 describe-security-groups --group-name database-sg|jq -r '.SecurityGroups[].GroupId') \
-    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1c"|jq -r '.Subnets[].SubnetId') \
-    --block-device-mappings "DeviceName=/dev/sdb,Ebs={DeleteOnTermination=true,VolumeSize=10,VolumeType=gp2}" \
-    --iam-instance-profile Name="db-stack-role" \
-    --credit-specification CpuCredits="unlimited" \
-    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=monitor},{Key=Domain,Value=mssux.com}]"
-```
-
-### 3.1 Setup Route 53 Registration
-```bash
-# Set the TimeZone
-sudo timedatectl set-timezone America/Chicago
-
-# Install packages.
-sudo apt-get update; sudo apt-get install --yes screen zfsutils-linux cloud-utils ec2-api-tools
-
-# Install cli53.
-sudo wget -O /usr/local/bin/cli53 https://github.com/barnybug/cli53/releases/download/0.8.17/cli53-linux-amd64
-# OR
-sudo wget -O /usr/local/bin/cli53 https://github.com/barnybug/cli53/releases/download/0.8.17/cli53-linux-arm64
-sudo chmod +x /usr/local/bin/cli53
-
-# Install registerRoute53.sh script.
-sudo wget -O /usr/local/bin/registerRoute53.sh https://raw.githubusercontent.com/ckmjreynolds/MariaDB-Stack/0.1.4/script/registerRoute53.sh
-sudo chmod +x /usr/local/bin/registerRoute53.sh
-
-# Schedule the script to run on reboot.
-(wget -O - https://raw.githubusercontent.com/ckmjreynolds/MariaDB-Stack/0.1.4/script/crontab)| crontab -
-
-# Reboot the server and verify DNS entry is added/updated.
-sudo reboot
-```
-
-### 3.2 Setup Docker
-```bash
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-sudo usermod -aG docker $USER
-rm get-docker.sh
-```
-
-### [3.3 Move Docker to ZFS](https://docs.docker.com/storage/storagedriver/zfs-driver/)
-```bash
-sudo systemctl stop docker
-sudo cp -au /var/lib/docker /var/lib/docker.bk
-sudo rm -rf /var/lib/docker
-sudo zpool create -o ashift=12 -o autoexpand=on -O relatime=on -O compression=lz4 -f zpool-docker -m /var/lib/docker /dev/nvme1n1
-sudo wget -O /etc/docker/daemon.json https://raw.githubusercontent.com/ckmjreynolds/MariaDB-Stack/0.1.4/script/docker_daemon.json
-sudo systemctl start docker
-sudo rm -rf /var/lib/docker.bk
-```
-
-### [3.4 Setup PMM](https://www.percona.com/doc/percona-monitoring-and-management/2.x/install/docker.html)
-```bash
-# Pull the latest 2.x image
-docker pull percona/pmm-server:2
-
-# Create a persistent data container.
-docker create --volume /srv --name pmm-data percona/pmm-server:2 /bin/true
-
-# Run the image to start PMM Server.
-docker run --detach --restart always --publish 443:443 --volumes-from pmm-data \
-    --name pmm-server percona/pmm-server:2
-```
-
-### [3.5 Setup SSL Encryption](https://hub.docker.com/r/certbot/dns-route53)
-```bash
-# Get SSL certificates.
-docker run -it --rm --name certbot -v "/etc/letsencrypt:/etc/letsencrypt" \
-    -v "/var/lib/letsencrypt:/var/lib/letsencrypt" certbot/dns-route53 \
-    certonly --dns-route53 -d monitor.mssux.com
-
-# Copy the SSL certificates.
-sudo -i
-cp -L /etc/letsencrypt/live/monitor.mssux.com/*.pem /home/ubuntu/.
-chown ubuntu:ubuntu /home/ubuntu/*.pem
-docker cp /home/ubuntu/fullchain.pem pmm-server:/srv/nginx/certificate.crt
-docker cp /home/ubuntu/privkey.pem pmm-server:/srv/nginx/certificate.key
-docker cp /home/ubuntu/chain.pem pmm-server:/srv/nginx/ca-certs.pem
-
-# Restart pmm-server.
-docker restart pmm-server
-```
-
-## 4. Create the `db1` EC2 Instance
+## 4. Create the `db1`, `db EC2 Instance
 ```bash
 # Ubuntu 20.04.1 LTS aarch64 (includes 3.1 below) - ami-00bae8092a688e69e
 aws ec2 run-instances --key-name aws_chris_reynolds --instance-type t4g.micro --image-id ami-00bae8092a688e69e \
     --security-group-ids $(aws ec2 describe-security-groups --group-name database-sg|jq -r '.SecurityGroups[].GroupId') \
     --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1a"|jq -r '.Subnets[].SubnetId') \
     --iam-instance-profile Name="db-stack-role" \
-    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=db1},{Key=Domain,Value=mssux.com}]"
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=db1},{Key=Domain,Value=<domain>}]"
 ```
 
 ### 4.1 Repeat [3.1](#31-setup-route-53-registration)
@@ -716,7 +689,7 @@ sudo mysql -e "select variable_name, variable_value from information_schema.glob
 mysql -h 127.0.0.1 -P6032 -u radmin -ppass -e "select hostgroup_id,hostname,status from runtime_mysql_servers;"
 ```
 
-# mssux.com - Playbook
+# <domain> - Playbook
 
 ## [Install AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2-mac.html)
 ### Install
@@ -830,7 +803,7 @@ sudo reboot
 ```bash
 ```
 
-ssh ubuntu@bastion.mssux.com -L 3306:db.mssux.com:3306
+ssh ubuntu@bastion.<domain> -L 3306:db.<domain>:3306
 curl -o- -L https://slss.io/install | bash
 
 
@@ -844,7 +817,7 @@ aws ec2 run-instances --key-name aws_chris_reynolds --instance-type t4g.micro --
     --block-device-mappings "DeviceName=/dev/sdb,Ebs={DeleteOnTermination=true,VolumeSize=10,VolumeType=gp2}" \
     --iam-instance-profile Name="db-stack-role" \
     --credit-specification CpuCredits="unlimited" \
-    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=temp},{Key=Domain,Value=mssux.com}]"
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=temp},{Key=Domain,Value=<domain>}]"
 
 # https://openzfs.github.io/openzfs-docs/Getting%20Started/Ubuntu/Ubuntu%2020.04%20Root%20on%20ZFS.html#
 sudo -i
@@ -1017,7 +990,7 @@ aws ec2 run-instances --key-name aws_chris_reynolds --instance-type t3.micro --i
     --block-device-mappings "DeviceName=/dev/sdb,Ebs={DeleteOnTermination=true,VolumeSize=8,VolumeType=gp2}" \
     --iam-instance-profile Name="db-stack-role" \
     --credit-specification CpuCredits="unlimited" \
-    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=temp},{Key=Domain,Value=mssux.com}]"
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=temp},{Key=Domain,Value=<domain>}]"
 
 aws ec2 run-instances --key-name aws_chris_reynolds --instance-type t4g.micro --image-id ami-0ea142bd244023692 \
     --security-group-ids $(aws ec2 describe-security-groups --group-name database-sg|jq -r '.SecurityGroups[].GroupId') \
@@ -1025,7 +998,7 @@ aws ec2 run-instances --key-name aws_chris_reynolds --instance-type t4g.micro --
     --block-device-mappings "DeviceName=/dev/sdb,Ebs={DeleteOnTermination=true,VolumeSize=8,VolumeType=gp2}" \
     --iam-instance-profile Name="db-stack-role" \
     --credit-specification CpuCredits="unlimited" \
-    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=temp},{Key=Domain,Value=mssux.com}]"
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=temp},{Key=Domain,Value=<domain>}]"
 
 # Become root and install needed packages.
 sudo -i
@@ -1110,7 +1083,7 @@ aws ec2 run-instances --key-name aws_chris_reynolds --instance-type t4g.micro --
     --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1a"|jq -r '.Subnets[].SubnetId') \
     --iam-instance-profile Name="db-stack-role" \
     --credit-specification CpuCredits="unlimited" \
-    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=moho},{Key=Domain,Value=mssux.com}]"
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=moho},{Key=Domain,Value=<domain>}]"
 
 aws ec2 run-instances --key-name aws_chris_reynolds --instance-type t3.micro --image-id ami-0b02c5feef29d5c60 \
     --security-group-ids $(aws ec2 describe-security-groups --group-name database-sg|jq -r '.SecurityGroups[].GroupId') \
@@ -1120,7 +1093,7 @@ aws ec2 run-instances --key-name aws_chris_reynolds --instance-type t3.micro --i
         "DeviceName=/dev/sdc,Ebs={DeleteOnTermination=true,VolumeSize=10,VolumeType=gp2}" \
     --iam-instance-profile Name="db-stack-role" \
     --credit-specification CpuCredits="unlimited" \
-    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=eve},{Key=Domain,Value=mssux.com}]"
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=eve},{Key=Domain,Value=<domain>}]"
 
 aws ec2 run-instances --key-name aws_chris_reynolds --instance-type t3.small --image-id ami-0b02c5feef29d5c60 \
     --security-group-ids $(aws ec2 describe-security-groups --group-name database-sg|jq -r '.SecurityGroups[].GroupId') \
@@ -1128,7 +1101,7 @@ aws ec2 run-instances --key-name aws_chris_reynolds --instance-type t3.small --i
     --block-device-mappings "DeviceName=/dev/sdb,Ebs={DeleteOnTermination=true,VolumeSize=10,VolumeType=gp2}" \
     --iam-instance-profile Name="db-stack-role" \
     --credit-specification CpuCredits="unlimited" \
-    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=kerbin},{Key=Domain,Value=mssux.com}]"
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=kerbin},{Key=Domain,Value=<domain>}]"
 
 aws ec2 run-instances --key-name aws_chris_reynolds --instance-type t4g.micro --image-id ami-00bae8092a688e69e \
     --security-group-ids $(aws ec2 describe-security-groups --group-name database-sg|jq -r '.SecurityGroups[].GroupId') \
@@ -1136,4 +1109,4 @@ aws ec2 run-instances --key-name aws_chris_reynolds --instance-type t4g.micro --
     --block-device-mappings "DeviceName=/dev/sdb,Ebs={DeleteOnTermination=true,VolumeSize=1,VolumeType=gp2}" \
     --iam-instance-profile Name="db-stack-role" \
     --credit-specification CpuCredits="unlimited" \
-    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=temp},{Key=Domain,Value=mssux.com}]"
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=temp},{Key=Domain,Value=<domain>}]"

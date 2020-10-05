@@ -1,4 +1,4 @@
-# **************************************************************************************
+# *********************************************************************************************************************
 # MIT License
 #
 # Copyright (c) 2019, 2020 Chris Reynolds
@@ -26,7 +26,7 @@
 #  Date        Author  Description
 #  ----        ------  -----------
 #  2020-09-27  CDR     Initial Version
-# **************************************************************************************
+# *********************************************************************************************************************
 [mariadb]
 # In addition to optimisation on the ZFS side, there are also optimisations we can make on the MySQL side, to take maximum possible advantage of what ZFS offers.
 # In order to prevent torn pages and avoid read-on-write overhead, we should set this to the underlying file system block size. If we are keeping the InnoDB logs
