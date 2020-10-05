@@ -239,7 +239,7 @@ sudo apt-get install --yes mariadb-server galera-4 mariadb-client libmariadb3 ma
 sudo mysql_secure_installation
 
 # Setup Users
-MariaDB-Stack/script/configureUsers.sh <mariabackup password> <pmm password> <proxysql password> <repl password>
+./script/configureUsers.sh <mariabackup password> <pmm password> <proxysql password> <repl password>
 sudo mysql
 MariaDB [(none)]> SOURCE MariaDB-Stack/initdb.d/001_CREATE_USERS.sql
 MariaDB [(none)]> exit
@@ -249,8 +249,12 @@ sudo systemctl stop mariadb
 sudo systemctl disable mariadb
 
 # Setup this Node
-MariaDB-Stack/script/configureNode.sh <node>.<domain> <gtid_domain_id> <auto_increment_offset> \
+./script/configureNode.sh <node>.<domain> <gtid_domain_id> <auto_increment_offset> \
     "gcomm://db1.<domain>,db2.<domain>,db3.<domain>" <server_id> <wsrep_gtid_domain_id> "mariabackup password"
+
+./script/configureNode.sh db1.mssux.com 100 1 "gcomm://db1.mssux.com,db2.mssux.com,db3.mssux.com" 1 1000 "s9z7M5haCuTKxj43"
+./script/configureNode.sh db2.mssux.com 200 2 "gcomm://db1.mssux.com,db2.mssux.com,db3.mssux.com" 2 1000 "s9z7M5haCuTKxj43"
+./script/configureNode.sh db3.mssux.com 300 3 "gcomm://db1.mssux.com,db2.mssux.com,db3.mssux.com" 3 1000 "s9z7M5haCuTKxj43"
 
 # Install PMM Client
 # https://www.percona.com/doc/percona-server/LATEST/installation/apt_repo.html

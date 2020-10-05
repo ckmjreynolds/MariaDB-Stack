@@ -43,6 +43,6 @@ export PROXYSQL_PASSWORD=$3
 export REPL_PASSWORD=$4
 
 # Replace placeholders in the .sql files.
-for f in /mnt/backup/MariaDB-Stack/initdb.d/*.template; do
+for f in ./initdb.d/*.template; do
 	envsubst < "$f" > "${f%.template}"
 done
