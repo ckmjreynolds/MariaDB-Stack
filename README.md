@@ -1,14 +1,13 @@
 # MariaDB-Stack
 ## Example Deployment (AWS)
 ### Instances
-| Hostname    | Instance Type   | Availability Zone | Operating System      | Description        |
-| :---------- | :-------------- | :---------------- |:--------------------- | :----------------- |
-| `monitor`   | `t3.small 2GB`  | `us-east-1c`      | `Ubuntu 20.04.01 LTS` | `PMM Monitoring`   |
-| `db1`       | `t4g.micro 1GB` | `us-east-1a`      | `Ubuntu 20.04.01 LTS` | `Galera Node #1`   |
-| `db2`       | `t4g.micro 1GB` | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | `Galera Node #2`   |
-| `db3`       | `t4g.micro 1GB` | `us-east-1c`      | `Ubuntu 20.04.01 LTS` | `Galera Node #3`   |
-| `proxysql1` | `t3.nano 0.5GB` | `us-east-1a`      | `Ubuntu 20.04.01 LTS` | `ProxySQL Node #1` |
-| `proxysql2` | `t3.nano 0.5GB` | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | `ProxySQL Node #2` |
+| Hostname    | Instance Type     | Disk Space        | Availability Zone | Operating System      | Description        |
+| :---------- | :---------------- | :---------------- | :---------------- |:--------------------- | :----------------- |
+| `proxysql1` | `t3.nano 0.5GB`   |                   | `us-east-1a`      | `Ubuntu 20.04.01 LTS` | `ProxySQL Node #1` |
+| `proxysql2` | `t3.nano 0.5GB`   |                   | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | `ProxySQL Node #2` |
+| `db1`       | `c6gd.medium 2GB` |                   | `us-east-1a`      | `Ubuntu 20.04.01 LTS` | `Galera Node #1`   |
+| `db2`       | `c6gd.medium 2GB` |                   | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | `Galera Node #2`   |
+| `db3`       | `c6gd.medium 2GB` |                   | `us-east-1c`      | `Ubuntu 20.04.01 LTS` | `Galera Node #3`   |
 
 ## 1. Clone this Repository
 ```bash
@@ -21,15 +20,6 @@ cd MariaDB-Stack
 # Get my IP address to setup Administration Ingress
 IP=$(dig +short myip.opendns.com @resolver1.opendns.com)
 
-# Database Monitoring Security Group
-aws ec2 create-security-group --group-name db-monitor-sg --description "Database Monitor Security Group" \
-    --tag-specifications "ResourceType=security-group,Tags={Key=Name,Value=db-monitor-sg}"
-
-aws ec2 authorize-security-group-ingress --group-name db-monitor-sg --ip-permissions \
-    IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges='[{CidrIp='${IP}'/32,Description="SSH for Administration."}]' \
-    IpProtocol=tcp,FromPort=443,ToPort=443,IpRanges='[{CidrIp='${IP}'/32,Description="HTTPS for Administration."}]' \
-    IpProtocol=tcp,FromPort=443,ToPort=443,IpRanges='[{CidrIp=172.31.0.0/16,Description="HTTPS for Monitoring."}]'
-
 # Database Security Group
 aws ec2 create-security-group --group-name db-database-sg --description "Database Security Group" \
     --tag-specifications "ResourceType=security-group,Tags={Key=Name,Value=db-database-sg}"
@@ -38,6 +28,8 @@ aws ec2 authorize-security-group-ingress --group-name db-database-sg --ip-permis
     IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges='[{CidrIp='${IP}'/32,Description="SSH for Administration."}]' \
     IpProtocol=tcp,FromPort=3306,ToPort=3306,IpRanges='[{CidrIp='${IP}'/32,Description="MySQL for Administration."}]' \
     IpProtocol=tcp,FromPort=3306,ToPort=3306,IpRanges='[{CidrIp=172.31.0.0/16,Description="MySQL for Application."}]'
+
+aws ec2 authorize-security-group-ingress --group-name db-database-sg --source-group db-database-sg --protocol -1 --port -1
 
 # Database ProxySQL Security Group
 aws ec2 create-security-group --group-name db-proxysql-sg --description "Database ProxySQL Security Group" \
@@ -48,6 +40,8 @@ aws ec2 authorize-security-group-ingress --group-name db-proxysql-sg --ip-permis
     IpProtocol=tcp,FromPort=6032,ToPort=6032,IpRanges='[{CidrIp='${IP}'/32,Description="ProxySQL Admin for Administration."}]' \
     IpProtocol=tcp,FromPort=6033,ToPort=6033,IpRanges='[{CidrIp='${IP}'/32,Description="ProxySQL for Administration."}]' \
     IpProtocol=tcp,FromPort=6033,ToPort=6033,IpRanges='[{CidrIp=172.31.0.0/16,Description="ProxySQL for Application."}]'
+
+aws ec2 authorize-security-group-ingress --group-name db-proxysql-sg --source-group db-proxysql-sg --protocol -1 --port -1
 ```
 
 ## 3. Create s3 Bucket for Backups
@@ -102,7 +96,7 @@ cd MariaDB-Stack
 sudo timedatectl set-timezone America/Chicago
 
 # Install packages.
-sudo apt-get update; sudo apt-get install --yes screen zfsutils-linux s3fs cloud-utils ec2-api-tools
+sudo apt-get update; sudo apt-get install --yes screen zfsutils-linux s3fs cloud-utils ec2-api-tools p7zip-full
 
 # Install cli53.
 sudo wget -O /usr/local/bin/cli53 https://github.com/barnybug/cli53/releases/download/0.8.17/cli53-linux-amd64
@@ -122,6 +116,15 @@ sudo chmod +x /usr/local/bin/registerRoute53.sh
 sudo -i
 mkdir /mnt/backup
 echo 's3fs#<bucket> /mnt/backup fuse _netdev,allow_other,iam_role=auto,storage_class=intelligent_tiering 0 0' >> /etc/fstab
+
+Q: Why does my AWS S3 bill cost a lot more than the storage fee?
+
+* A: ListBucket and HeadObject API calls were being made updatedb (and located).  Solution: Add your mount point to PRUNEPATHS in /etc/updatedb.conf so updatedb does not include this when it scans
+
+wget https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/arm64/latest/amazon-cloudwatch-agent.deb
+sudo dpkg -i -E ./amazon-cloudwatch-agent.deb
+sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-config-wizard
+sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a start
 
 # Reboot the server and verify DNS entry is added/updated and s3 bucket mounted.
 reboot
@@ -256,30 +259,45 @@ sudo systemctl disable mariadb
 ./script/configureNode.sh db2.mssux.com 200 2 "gcomm://db1.mssux.com,db2.mssux.com,db3.mssux.com" 2 1000 "s9z7M5haCuTKxj43"
 ./script/configureNode.sh db3.mssux.com 300 3 "gcomm://db1.mssux.com,db2.mssux.com,db3.mssux.com" 3 1000 "s9z7M5haCuTKxj43"
 
-# Install PMM Client
-# https://www.percona.com/doc/percona-server/LATEST/installation/apt_repo.html
-wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
-sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
-sudo apt-get update
-sudo apt-get install pmm2-client
-
 # Bootstrap (on db1) or start (on db2, db3) mariadb.
 sudo systemctl enable mariadb
-sudo galera_new_cluster
 
-# Setup Monitoring
-sudo pmm-admin config --server-url=https://admin:<password>@monitor.<domain>:443
-pmm-admin add mysql --username=pmm --password=<password> --query-source=perfschema <node>.<domain>:3306
+sudo galera_new_cluster
+# OR
+sudo systemctl start mariadb
+
+wget https://download.newrelic.com/infrastructure_agent/binaries/linux/arm64/newrelic-infra_linux_1.12.6_arm64.tar.gz
+sudo systemctl status newrelic-infra
+
+# Monitoring: Add as remote instances as we are using arm64 instances and pmm2-client is not supported on arm64.
+# Add the New Relic Infrastructure Agent gpg key \
+curl -s https://download.newrelic.com/infrastructure_agent/gpg/newrelic-infra.gpg | sudo apt-key add - && \
+\
+# Create a configuration file and add your license key \
+echo "license_key: f20b184c3a0f78741a57270f1a32f25b8b0dNRAL" | sudo tee -a /etc/newrelic-infra.yml && \
+\
+# Create the agent’s yum repository \
+printf "deb [arch=arm64] https://download.newrelic.com/infrastructure_agent/linux/apt bionic main" | sudo tee -a /etc/apt/sources.list.d/newrelic-infra.list && \
+\
+# Update your apt cache \
+sudo apt-get update && \
+\
+# Run the installation script \
+sudo apt-get install newrelic-infra -y
+
+sudo apt-get install openjdk-8-jre nodejs nodejs-legacy
+LICENSE_KEY=f20b184c3a0f78741a57270f1a32f25b8b0dNRAL bash -c "$(curl -sSL https://download.newrelic.com/npi/release/install-npi-linux-debian-arm.sh)"
 ```
 
 ## X. Cleanup
 ```bash
 # Cleanup Instances
-INSTANCE4=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=db3"|jq -r '.Reservations[].Instances[].InstanceId')
-INSTANCE3=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=db2"|jq -r '.Reservations[].Instances[].InstanceId')
-INSTANCE2=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=db1"|jq -r '.Reservations[].Instances[].InstanceId')
-INSTANCE1=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=monitor"|jq -r '.Reservations[].Instances[].InstanceId')
-aws ec2 terminate-instances --instance-ids ${INSTANCE1} ${INSTANCE2} ${INSTANCE3} ${INSTANCE4}
+INSTANCE5=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=proxysql2"|jq -r '.Reservations[].Instances[].InstanceId')
+INSTANCE4=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=proxysql1"|jq -r '.Reservations[].Instances[].InstanceId')
+INSTANCE3=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=db3"|jq -r '.Reservations[].Instances[].InstanceId')
+INSTANCE2=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=db2"|jq -r '.Reservations[].Instances[].InstanceId')
+INSTANCE1=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=db1"|jq -r '.Reservations[].Instances[].InstanceId')
+aws ec2 terminate-instances --instance-ids ${INSTANCE1} ${INSTANCE2} ${INSTANCE3} ${INSTANCE4} ${INSTANCE5}
 
 # Remove the Role from the Profile
 aws iam remove-role-from-instance-profile --instance-profile-name db-stack-profile --role-name db-stack-role
@@ -299,7 +317,7 @@ aws iam delete-policy --policy-arn arn:aws:iam::$(aws sts get-caller-identity|jq
 
 # Remove the s3 Bucket
 BUCKET=$(aws sts get-caller-identity|jq -r '.Account')-db-backups
-aws s3api delete-bucket --bucket ${BUCKET}
+aws s3 rb s3://${BUCKET} --force
 
 # Remove db-proxysql-sg Security Group
 SG=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=db-proxysql-sg"|jq -r '.SecurityGroups[].GroupId')
@@ -307,10 +325,6 @@ aws ec2 delete-security-group --group-id ${SG}
 
 # Remove db-database-sg Security Group
 SG=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=db-database-sg"|jq -r '.SecurityGroups[].GroupId')
-aws ec2 delete-security-group --group-id ${SG}
-
-# Remove db-monitor-sg Security Group
-SG=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=db-monitor-sg"|jq -r '.SecurityGroups[].GroupId')
 aws ec2 delete-security-group --group-id ${SG}
 ```
 
@@ -329,6 +343,21 @@ aws ec2 create-tags --tags "Key=Name,Value=default" --resources ${SG}
 # *********************************************************************************************************************
 ./script/delete-default-vpc.sh
 ```
+
+# sudo killall -HUP mDNSResponder;sudo killall mDNSResponderHelper;sudo dscacheutil -flushcache
+https://medium.com/nttlabs/buildx-multiarch-2c6c2df00ca2
+sudo apt-get install qemu
+wget https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/arm64/latest/amazon-cloudwatch-agent.deb
+sudo dpkg -i -E ./amazon-cloudwatch-agent.deb
+sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-config-wizard
+sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a start
+
+# Build ProxySQL for ARM64.
+sudo apt-get install -y automake bzip2 cmake make g++ gcc git openssl libssl-dev libgnutls28-dev libtool patch
+rm -rf proxysql
+git clone --depth 1 --single-branch --branch v2.0.14 https://github.com/sysown/proxysql.git
+cd proxysql
+make
 
 ## 4. Create the `db1`, `db EC2 Instance
 ```bash
