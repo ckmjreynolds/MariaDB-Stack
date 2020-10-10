@@ -243,10 +243,85 @@ rm -rf MariaDB-Stack
 ```bash
 # m h  dom mon dow   command
 (sudo crontab -l; echo "0 2 * * * /home/ubuntu/MariaDB-Stack/script/backup.sh <mariabackup pwd> <encryption key>")| sudo crontab -
-(sudo crontab -l; echo "35 14 * * * /home/ubuntu/MariaDB-Stack/script/backup.sh s9z7M5haCuTKxj43 dRztSx9fH7BQ6brW")| sudo crontab -
+```
+
+### 6.4. Recover Galera from Backups
+#### 6.4.1. Bootstrap
+```bash
+# Re-build lost mount (for ephemeral LUNs)
+sudo zpool create -O relatime=on -O compression=lz4 -O logbias=throughput -O primarycache=metadata -O recordsize=16k \
+    -O xattr=sa -o ashift=12 -o autoexpand=on -f zpool-mysql -m /var/lib/mysql /dev/nvme1n1
+
+# Extract the backup.
+cd /var/lib/mysql
+7z e <backupfile> -so -p<password> |sudo mbstream -x
+7z e /mnt/backup/db1/2020-10-10_14-55-20.db1.xb.7z.001 -so -pdRztSx9fH7BQ6brW |sudo mbstream -x
+sudo mariabackup --prepare --target-dir=.
+sudo chown -R mysql:mysql /var/lib/mysql/
+
+# Start MariaDB.
+sudo systemctl enable mariadb
+sudo galera_new_cluster
+sudo systemctl status mariadb.service
+```
+
+#### 6.4.2. Recover the other nodes
+```bash
+# Re-build lost mount (for ephemeral LUNs)
+sudo zpool create -O relatime=on -O compression=lz4 -O logbias=throughput -O primarycache=metadata -O recordsize=16k \
+    -O xattr=sa -o ashift=12 -o autoexpand=on -f zpool-mysql -m /var/lib/mysql /dev/nvme1n1
+sudo chown -R mysql:mysql /var/lib/mysql/
+
+# Start MariaDB.
+sudo systemctl enable mariadb
+sudo systemctl start mariadb
+sudo systemctl status mariadb.service
+```
+
+#### 6.4.3. Start Galara Arbitrator
+```bash
+# Start MariaDB.
+sudo systemctl enable mariadb
+sudo systemctl start mariadb
+sudo systemctl status mariadb.service
 ```
 
 
+## 7. Create the ProxySQL EC2 Instanes
+```bash
+# Ubuntu Server 20.04 LTS amd64 - ami-0786791f6e8a47967
+aws ec2 run-instances --key-name <ssh_key> --instance-type t3.nano --image-id ami-0786791f6e8a47967 \
+    --security-group-ids $(aws ec2 describe-security-groups --group-name db-proxysql-sg|jq -r '.SecurityGroups[].GroupId') \
+    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1a"|jq -r '.Subnets[].SubnetId') \
+    --block-device-mappings "DeviceName=/dev/sdb,Ebs={DeleteOnTermination=true,VolumeSize=1,VolumeType=gp2}" \
+    --iam-instance-profile Name="db-stack-profile" \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=proxysql1},{Key=Domain,Value=<domain>}]"
+
+aws ec2 run-instances --key-name <ssh_key> --instance-type t3.nano --image-id ami-0786791f6e8a47967 \
+    --security-group-ids $(aws ec2 describe-security-groups --group-name db-proxysql-sg|jq -r '.SecurityGroups[].GroupId') \
+    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1b"|jq -r '.Subnets[].SubnetId') \
+    --block-device-mappings "DeviceName=/dev/sdb,Ebs={DeleteOnTermination=true,VolumeSize=1,VolumeType=gp2}" \
+    --iam-instance-profile Name="db-stack-profile" \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=proxysql2},{Key=Domain,Value=<domain>}]"
+```
+
+### 6.1 Setup Docker
+```bash
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+sudo usermod -aG docker $USER
+rm get-docker.sh
+```
+
+### [6.2 Move Docker to ZFS](https://docs.docker.com/storage/storagedriver/zfs-driver/)
+```bash
+sudo systemctl stop docker
+sudo rm -rf /var/lib/docker
+sudo zpool create -o ashift=12 -o autoexpand=on -O relatime=on -O compression=lz4 -f zpool-docker -m /var/lib/docker /dev/nvme1n1
+sudo cp ./conf.d/docker/docker_daemon.json /etc/docker/daemon.json
+sudo systemctl start docker
+sudo docker info|grep zfs
+```
 
 ```bash
 sudo mysql -e "select variable_name, variable_value from information_schema.global_status where variable_name in ('wsrep_cluster_size', 'wsrep_local_state_comment', 'wsrep_cluster_status', 'wsrep_incoming_addresses');"

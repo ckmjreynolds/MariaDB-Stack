@@ -28,3 +28,13 @@
 #  2019-12-23  CDR     Initial Version
 # **************************************************************************************
 .DS_Store
+
+# Don't save files generated from templates.
+conf.d/garb/garb.template
+conf.d/IAM/IAM_policy.template
+conf.d/mysql/05_galera.cnf
+conf.d/mysql/07_replication.cnf
+conf.d/proxysql/proxysql.cnf.template
+initdb.d/001_CREATE_USERS.sql
+conf.d/mysql/05_galera.cnf
+

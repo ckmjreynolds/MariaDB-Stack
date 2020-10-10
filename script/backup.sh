@@ -34,5 +34,5 @@ mkdir -p ${BACKUPDIR}
 
 
 # Create a FULL, compressed, encrypted backup.
-mariabackup --user=mariabackup --password=${1} --backup --stream=xbstream | 7z a -si -p${2} -v1g ${TARGETFILE}
+mariabackup --user=mariabackup --password=${1} --backup --galera-info --stream=xbstream | 7z a -si -p${2} -v1g ${TARGETFILE}
 exit 0

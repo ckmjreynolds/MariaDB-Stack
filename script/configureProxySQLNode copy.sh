@@ -1,5 +1,5 @@
 #!/bin/bash
-# **************************************************************************************
+# *********************************************************************************************************************
 # MIT License
 #
 # Copyright (c) 2019, 2020 Chris Reynolds
@@ -26,15 +26,26 @@
 #
 #  Date        Author  Description
 #  ----        ------  -----------
-#  2019-12-11  CDR     Initial Version
-#  2020-02-06  CDR     MariaDB 10.4.12, updated tags to match upstream.
-#  2020-04-13  CDR     Bump to MariaDB 10.5.2 (for builder); ProxySQL 2.0.10.
-# **************************************************************************************
+#  2020-10-10  CDR     Initial Version
+# *********************************************************************************************************************
+if [ -z "$*" ]; then
+	echo "USAGE: configureProxySQLNode.sh"
+	echo "	<proxysql admin pwd - The password for the admin interface for ProxySQL."
+	echo "	<proxysql pwd> - The password for the proxysql user on the Galera nodes."
+	echo "  <primary db> - The primary DB node for this ProxySQL instance."
+	echo "  <secondary db> - The primary DB node for this ProxySQL instance."
+	exit 0
+fi
 
-# Remove any existing stack.
-docker stack remove galera && sleep 90
-docker system prune --volumes -f && sleep 30
-docker secret rm MYSQL_ROOT_PASSWORD
-docker secret rm PROXYSQL_ADMIN_PASSWORD
-docker secret rm PROXYSQL_USER_PASSWORD
-docker ps -a
+export PROXYSQL_ADMIN_PASSWORD=$1
+export PROXYSQL_PASSWORD=$2
+export PRIMARY_DB=$3
+export SECONDARY_DB=$4
+
+# Replace placeholders in the .cfg files.
+for f in ./conf.d/proxysql/*.template; do
+	envsubst < "$f" > "${f%.template}"
+done
+
+# Copy the config files to the target location.
+sudo cp ./conf.d/proxysql/proxysql.cnf /etc/proxysql.cnf

@@ -51,12 +51,12 @@ export WSREP_GTID_DOMAIN_ID=$7
 export MARIABACKUP_PASSWORD=$8
 
 # Replace placeholders in the .cfg files.
-for f in ./conf.d/*.template; do
+for f in ./conf.d/mysql/*.template; do
 	envsubst < "$f" > "${f%.template}"
 done
 
 # Copy the config files to the target location.
-sudo cp ./conf.d/*.cnf /etc/mysql/conf.d
+sudo cp ./conf.d/mysql/*.cnf /etc/mysql/conf.d
 
 # Comment out these lines as we override them.
 sudo sed -i.bak 's/^\(bind.*\)/#\1/g' /etc/mysql/mariadb.conf.d/50-server.cnf

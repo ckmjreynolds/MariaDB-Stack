@@ -25,12 +25,12 @@
 #
 #  Date        Author  Description
 #  ----        ------  -----------
-#  2020-09-06  CDR     Initial Version
+#  2020-10-10  CDR     Initial Version
 # *********************************************************************************************************************
 -- Create a mariabackup account (used for SST).
 CREATE USER 'mariabackup'@'localhost' IDENTIFIED BY '${MARIABACKUP_PASSWORD}';
 GRANT RELOAD, PROCESS, LOCK TABLES, REPLICATION CLIENT ON *.* TO 'mariabackup'@'localhost';
 
 -- Create a proxysql account (used to monitor the health of the nodes).
-CREATE USER 'proxysql'@'%' IDENTIFIED BY '${PROXYSQL_PASSWORD}';
-GRANT USAGE, REPLICATION CLIENT ON *.* TO 'proxysql'@'%';
+CREATE USER 'proxysql'@'172.31.%' IDENTIFIED BY '${PROXYSQL_PASSWORD}';
+GRANT USAGE, REPLICATION CLIENT ON *.* TO 'proxysql'@'172.31.%';
