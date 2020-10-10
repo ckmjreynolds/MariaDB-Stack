@@ -325,14 +325,11 @@ sudo docker info|grep zfs
 
 ### 7.3 Setup ProxySQL
 ```bash
-	echo "USAGE: configureProxySQLNode.sh"
-	echo "	<proxysql admin pwd - The password for the admin interface for ProxySQL."
-	echo "	<proxysql pwd> - The password for the proxysql user on the Galera nodes."
-	echo "  <primary db> - The primary DB node for this ProxySQL instance."
-	echo "  <secondary db> - The primary DB node for this ProxySQL instance."
+# Configure ProxySQL.
+./script/configureProxySQLNode.sh <proxysql admin pwd> <proxysql pwd> <primary db> <secondary db>
 
-./script/configureNode.sh <node>.<domain> <gtid_domain_id> <auto_increment_offset> \
-    "gcomm://db1.<domain>,db2.<domain>,db3.<domain>" <server_id> <wsrep_gtid_domain_id> "mariabackup password"
+./script/configureProxySQLNode.sh URVR5UUGbhfSzPm8 252hSsNCr7VvkSbm db1.mssux.com db2.mssux.com
+./script/configureProxySQLNode.sh URVR5UUGbhfSzPm8 252hSsNCr7VvkSbm db2.mssux.com db1.mssux.com
 ```
 
 ```bash

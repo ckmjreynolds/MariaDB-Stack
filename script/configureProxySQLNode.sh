@@ -43,7 +43,7 @@ export PRIMARY_DB=$3
 export SECONDARY_DB=$4
 
 # Replace placeholders in the .cfg files.
-for f in ./conf.d/proxysql/*.template; do
+for f in ./conf.d/proxysql/*.cnf.template; do
 	envsubst < "$f" > "${f%.template}"
 done
 
