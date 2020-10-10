@@ -1,4 +1,4 @@
-# **************************************************************************************
+# *********************************************************************************************************************
 # MIT License
 #
 # Copyright (c) 2019, 2020 Chris Reynolds
@@ -26,19 +26,11 @@
 #  Date        Author  Description
 #  ----        ------  -----------
 #  2020-09-06  CDR     Initial Version
-# **************************************************************************************
+# *********************************************************************************************************************
 -- Create a mariabackup account (used for SST).
 CREATE USER 'mariabackup'@'localhost' IDENTIFIED BY '${MARIABACKUP_PASSWORD}';
 GRANT RELOAD, PROCESS, LOCK TABLES, REPLICATION CLIENT ON *.* TO 'mariabackup'@'localhost';
 
--- Create a pmm account (used to monitor the health of the nodes).
-CREATE USER 'pmm'@'localhost' IDENTIFIED BY '${PMM_PASSWORD}' WITH MAX_USER_CONNECTIONS 10;
-GRANT SELECT, PROCESS, SUPER, REPLICATION CLIENT, RELOAD ON *.* TO 'pmm'@'localhost';
-
 -- Create a proxysql account (used to monitor the health of the nodes).
 CREATE USER 'proxysql'@'%' IDENTIFIED BY '${PROXYSQL_PASSWORD}';
 GRANT USAGE, REPLICATION CLIENT ON *.* TO 'proxysql'@'%';
-
--- Create a replication user.
-CREATE USER 'repl'@'%' IDENTIFIED BY '${REPL_PASSWORD}';
-GRANT REPLICATION SLAVE ON *.*  TO 'repl'@'%';

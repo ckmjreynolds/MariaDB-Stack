@@ -147,7 +147,70 @@ ARM64=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=arm64"|jq -r 
 aws ec2 terminate-instances --instance-ids ${AMD64} ${ARM64}
 ```
 
-## 6. Create the `garb` EC2 Instance
+## 6. Create the Galera EC2 Instanes
+```bash
+# Ubuntu Server 20.04 LTS arm64 - ami-08f51af0a56da05bb
+aws ec2 run-instances --key-name <ssh_key> --instance-type c6gd.medium --image-id ami-08f51af0a56da05bb \
+    --security-group-ids $(aws ec2 describe-security-groups --group-name db-database-sg|jq -r '.SecurityGroups[].GroupId') \
+    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1a"|jq -r '.Subnets[].SubnetId') \
+    --iam-instance-profile Name="db-stack-profile" \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=db1},{Key=Domain,Value=<domain>}]"
+
+aws ec2 run-instances --key-name <ssh_key> --instance-type c6gd.medium --image-id ami-08f51af0a56da05bb \
+    --security-group-ids $(aws ec2 describe-security-groups --group-name db-database-sg|jq -r '.SecurityGroups[].GroupId') \
+    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1b"|jq -r '.Subnets[].SubnetId') \
+    --iam-instance-profile Name="db-stack-profile" \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=db2},{Key=Domain,Value=<domain>}]"
+
+aws ec2 run-instances --key-name <ssh_key> --instance-type t4g.micro --image-id ami-08f51af0a56da05bb \
+    --security-group-ids $(aws ec2 describe-security-groups --group-name db-database-sg|jq -r '.SecurityGroups[].GroupId') \
+    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1c"|jq -r '.Subnets[].SubnetId') \
+    --iam-instance-profile Name="db-stack-profile" \
+    --credit-specification CpuCredits="unlimited" \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=garb},{Key=Domain,Value=<domain>}]"
+```
+
+## 6.1. Create the Galera Nodes
+```bash
+# Repeat these steps for each of the Galera nodes.
+# Create the zpool for MariaDB
+sudo zpool create -O relatime=on -O compression=lz4 -O logbias=throughput -O primarycache=metadata -O recordsize=16k \
+    -O xattr=sa -o ashift=12 -o autoexpand=on -f zpool-mysql -m /var/lib/mysql /dev/nvme1n1
+
+# Setup Repository
+curl -LsS https://downloads.mariadb.com/MariaDB/mariadb_repo_setup | sudo bash -s -- --skip-maxscale --skip-tools
+
+# Install MariaDB
+sudo apt-get install --yes mariadb-server galera-4 mariadb-client libmariadb3 mariadb-backup mariadb-common
+sudo mysql_secure_installation
+
+# Setup Users
+./script/configureUsers.sh <mariabackup password> <proxysql password>
+sudo mysql
+MariaDB [(none)]> SOURCE MariaDB-Stack/initdb.d/001_CREATE_USERS.sql
+MariaDB [(none)]> exit
+
+# Stop and disable MariaDB for now.
+sudo systemctl stop mariadb
+sudo systemctl disable mariadb
+
+# Setup this Node
+./script/configureNode.sh <node>.<domain> <gtid_domain_id> <auto_increment_offset> \
+    "gcomm://db1.<domain>,db2.<domain>,db3.<domain>" <server_id> <wsrep_gtid_domain_id> "mariabackup password"
+
+./script/configureNode.sh db1.mssux.com 100 1 "gcomm://db1.mssux.com,db2.mssux.com,db3.mssux.com" 1 1000 "s9z7M5haCuTKxj43"
+./script/configureNode.sh db2.mssux.com 200 2 "gcomm://db1.mssux.com,db2.mssux.com,db3.mssux.com" 2 1000 "s9z7M5haCuTKxj43"
+./script/configureNode.sh db3.mssux.com 300 3 "gcomm://db1.mssux.com,db2.mssux.com,db3.mssux.com" 3 1000 "s9z7M5haCuTKxj43"
+
+# Bootstrap (on db1) or start (on db2, db3) mariadb.
+sudo systemctl enable mariadb
+
+sudo galera_new_cluster
+# OR
+sudo systemctl start mariadb
+```
+
+### 6.2. Create the `garb` EC2 Instance
 ```bash
 # Ubuntu Server 20.04 LTS arm64 - ami-08f51af0a56da05bb
 aws ec2 run-instances --key-name <ssh_key> --instance-type t4g.micro --image-id ami-08f51af0a56da05bb \
@@ -164,23 +227,46 @@ curl -LsS https://downloads.mariadb.com/MariaDB/mariadb_repo_setup | sudo bash -
 sudo apt-get install --yes galera-arbitrator-4
 
 # Configure Galera Arbitrator
-export CLUSTER_NODES=${CLUSTER_NODES}
-export GALERA_GROUP=${CLUSTER_NAME}
+export CLUSTER_NODES="db1.<domain>:4567, db2.<domain>:4567"
+export GALERA_GROUP="<cluster name>"
 
+sudo -i
 export CLUSTER_NODES="db1.mssux.com:4567, db2.mssux.com:4567"
-export GALERA_GROUP="mssux_dbcluster"
-envsubst < ./script/garb.template > /etc/default/garb
+export CLUSTER_NAME="mssux_dbcluster"
+envsubst < /home/ubuntu/MariaDB-Stack/script/garb.template > /etc/default/garb
+exit
 
-sudo sed -i.bak 's/^\(# GALERA_NODES=.*\)/GALERA_NODES="db1.:4567, 192.168.70.62:4567, 192.168.70.63:4567"\1/g' /etc/default/garb
-sudo sed -i.bak 's/^\(expire.*\)/#\1/g' /etc/mysql/mariadb.conf.d/50-server.cnf
+# Start Galera Arbitrator
+sudo systemctl disable garb.service
+sudo systemctl start garb
+sudo systemctl status garb.service
 
-# Ubuntu Server 20.04 LTS arm64 - ami-08f51af0a56da05bb
-aws ec2 run-instances --key-name aws_chris_reynolds --instance-type t4g.micro --image-id ami-08f51af0a56da05bb \
-    --security-group-ids $(aws ec2 describe-security-groups --group-name db-database-sg|jq -r '.SecurityGroups[].GroupId') \
-    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1c"|jq -r '.Subnets[].SubnetId') \
-    --iam-instance-profile Name="db-stack-profile" \
-    --credit-specification CpuCredits="unlimited" \
-    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=garb},{Key=Domain,Value=mssux.com}]"
+# Cleanup
+rm -rf MariaDB-Stack
+```
+
+
+wget https://download.newrelic.com/infrastructure_agent/binaries/linux/arm64/newrelic-infra_linux_1.12.6_arm64.tar.gz
+sudo systemctl status newrelic-infra
+
+# Monitoring: Add as remote instances as we are using arm64 instances and pmm2-client is not supported on arm64.
+# Add the New Relic Infrastructure Agent gpg key \
+curl -s https://download.newrelic.com/infrastructure_agent/gpg/newrelic-infra.gpg | sudo apt-key add - && \
+\
+# Create a configuration file and add your license key \
+echo "license_key: f20b184c3a0f78741a57270f1a32f25b8b0dNRAL" | sudo tee -a /etc/newrelic-infra.yml && \
+\
+# Create the agent’s yum repository \
+printf "deb [arch=arm64] https://download.newrelic.com/infrastructure_agent/linux/apt bionic main" | sudo tee -a /etc/apt/sources.list.d/newrelic-infra.list && \
+\
+# Update your apt cache \
+sudo apt-get update && \
+\
+# Run the installation script \
+sudo apt-get install newrelic-infra -y
+
+sudo apt-get install openjdk-8-jre nodejs nodejs-legacy
+LICENSE_KEY=f20b184c3a0f78741a57270f1a32f25b8b0dNRAL bash -c "$(curl -sSL https://download.newrelic.com/npi/release/install-npi-linux-debian-arm.sh)"
 ```
 
 ### 6.1 Setup Docker
@@ -230,93 +316,6 @@ docker cp /home/ubuntu/chain.pem pmm-server:/srv/nginx/ca-certs.pem
 
 # Restart pmm-server.
 docker restart pmm-server
-```
-
-## 7. Create the Galera Nodes
-```bash
-# Ubuntu Server 20.04 LTS arm64 - ami-0e9f3a26099cdb584
-aws ec2 run-instances --key-name <ssh_key> --instance-type t4g.micro --image-id ami-0e9f3a26099cdb584 \
-    --security-group-ids $(aws ec2 describe-security-groups --group-name db-database-sg|jq -r '.SecurityGroups[].GroupId') \
-    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1a"|jq -r '.Subnets[].SubnetId') \
-    --block-device-mappings "DeviceName=/dev/sdb,Ebs={DeleteOnTermination=true,VolumeSize=10,VolumeType=gp2}" \
-    --iam-instance-profile Name="db-stack-profile" \
-    --credit-specification CpuCredits="unlimited" \
-    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=db1},{Key=Domain,Value=<domain>}]"
-
-aws ec2 run-instances --key-name <ssh_key> --instance-type t4g.micro --image-id ami-0e9f3a26099cdb584 \
-    --security-group-ids $(aws ec2 describe-security-groups --group-name db-database-sg|jq -r '.SecurityGroups[].GroupId') \
-    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1b"|jq -r '.Subnets[].SubnetId') \
-    --block-device-mappings "DeviceName=/dev/sdb,Ebs={DeleteOnTermination=true,VolumeSize=10,VolumeType=gp2}" \
-    --iam-instance-profile Name="db-stack-profile" \
-    --credit-specification CpuCredits="unlimited" \
-    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=db2},{Key=Domain,Value=<domain>}]"
-
-aws ec2 run-instances --key-name <ssh_key> --instance-type t4g.micro --image-id ami-0e9f3a26099cdb584 \
-    --security-group-ids $(aws ec2 describe-security-groups --group-name db-database-sg|jq -r '.SecurityGroups[].GroupId') \
-    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1c"|jq -r '.Subnets[].SubnetId') \
-    --block-device-mappings "DeviceName=/dev/sdb,Ebs={DeleteOnTermination=true,VolumeSize=10,VolumeType=gp2}" \
-    --iam-instance-profile Name="db-stack-profile" \
-    --credit-specification CpuCredits="unlimited" \
-    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=db3},{Key=Domain,Value=<domain>}]"
-
-# Repeat these steps for each of the three Galera nodes.
-# Create the zpool for MariaDB
-sudo zpool create -O relatime=on -O compression=lz4 -O logbias=throughput -O primarycache=metadata -O recordsize=16k \
-    -O xattr=sa -o ashift=12 -o autoexpand=on -f zpool-mysql -m /var/lib/mysql /dev/nvme1n1
-
-# Setup Repository
-curl -LsS https://downloads.mariadb.com/MariaDB/mariadb_repo_setup | sudo bash -s -- --skip-maxscale --skip-tools
-
-# Install MariaDB
-sudo apt-get install --yes mariadb-server galera-4 mariadb-client libmariadb3 mariadb-backup mariadb-common
-sudo mysql_secure_installation
-
-# Setup Users
-./script/configureUsers.sh <mariabackup password> <pmm password> <proxysql password> <repl password>
-sudo mysql
-MariaDB [(none)]> SOURCE MariaDB-Stack/initdb.d/001_CREATE_USERS.sql
-MariaDB [(none)]> exit
-
-# Stop and disable MariaDB for now.
-sudo systemctl stop mariadb
-sudo systemctl disable mariadb
-
-# Setup this Node
-./script/configureNode.sh <node>.<domain> <gtid_domain_id> <auto_increment_offset> \
-    "gcomm://db1.<domain>,db2.<domain>,db3.<domain>" <server_id> <wsrep_gtid_domain_id> "mariabackup password"
-
-./script/configureNode.sh db1.mssux.com 100 1 "gcomm://db1.mssux.com,db2.mssux.com,db3.mssux.com" 1 1000 "s9z7M5haCuTKxj43"
-./script/configureNode.sh db2.mssux.com 200 2 "gcomm://db1.mssux.com,db2.mssux.com,db3.mssux.com" 2 1000 "s9z7M5haCuTKxj43"
-./script/configureNode.sh db3.mssux.com 300 3 "gcomm://db1.mssux.com,db2.mssux.com,db3.mssux.com" 3 1000 "s9z7M5haCuTKxj43"
-
-# Bootstrap (on db1) or start (on db2, db3) mariadb.
-sudo systemctl enable mariadb
-
-sudo galera_new_cluster
-# OR
-sudo systemctl start mariadb
-
-wget https://download.newrelic.com/infrastructure_agent/binaries/linux/arm64/newrelic-infra_linux_1.12.6_arm64.tar.gz
-sudo systemctl status newrelic-infra
-
-# Monitoring: Add as remote instances as we are using arm64 instances and pmm2-client is not supported on arm64.
-# Add the New Relic Infrastructure Agent gpg key \
-curl -s https://download.newrelic.com/infrastructure_agent/gpg/newrelic-infra.gpg | sudo apt-key add - && \
-\
-# Create a configuration file and add your license key \
-echo "license_key: f20b184c3a0f78741a57270f1a32f25b8b0dNRAL" | sudo tee -a /etc/newrelic-infra.yml && \
-\
-# Create the agent’s yum repository \
-printf "deb [arch=arm64] https://download.newrelic.com/infrastructure_agent/linux/apt bionic main" | sudo tee -a /etc/apt/sources.list.d/newrelic-infra.list && \
-\
-# Update your apt cache \
-sudo apt-get update && \
-\
-# Run the installation script \
-sudo apt-get install newrelic-infra -y
-
-sudo apt-get install openjdk-8-jre nodejs nodejs-legacy
-LICENSE_KEY=f20b184c3a0f78741a57270f1a32f25b8b0dNRAL bash -c "$(curl -sSL https://download.newrelic.com/npi/release/install-npi-linux-debian-arm.sh)"
 ```
 
 ## X. Cleanup
