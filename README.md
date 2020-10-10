@@ -305,7 +305,7 @@ aws ec2 run-instances --key-name <ssh_key> --instance-type t3.nano --image-id am
     --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=proxysql2},{Key=Domain,Value=<domain>}]"
 ```
 
-### 6.1 Setup Docker
+### 7.1 Setup Docker
 ```bash
 curl -fsSL https://get.docker.com -o get-docker.sh
 sudo sh get-docker.sh
@@ -313,7 +313,7 @@ sudo usermod -aG docker $USER
 rm get-docker.sh
 ```
 
-### [6.2 Move Docker to ZFS](https://docs.docker.com/storage/storagedriver/zfs-driver/)
+### [7.2 Move Docker to ZFS](https://docs.docker.com/storage/storagedriver/zfs-driver/)
 ```bash
 sudo systemctl stop docker
 sudo rm -rf /var/lib/docker
@@ -321,6 +321,18 @@ sudo zpool create -o ashift=12 -o autoexpand=on -O relatime=on -O compression=lz
 sudo cp ./conf.d/docker/docker_daemon.json /etc/docker/daemon.json
 sudo systemctl start docker
 sudo docker info|grep zfs
+```
+
+### 7.3 Setup ProxySQL
+```bash
+	echo "USAGE: configureProxySQLNode.sh"
+	echo "	<proxysql admin pwd - The password for the admin interface for ProxySQL."
+	echo "	<proxysql pwd> - The password for the proxysql user on the Galera nodes."
+	echo "  <primary db> - The primary DB node for this ProxySQL instance."
+	echo "  <secondary db> - The primary DB node for this ProxySQL instance."
+
+./script/configureNode.sh <node>.<domain> <gtid_domain_id> <auto_increment_offset> \
+    "gcomm://db1.<domain>,db2.<domain>,db3.<domain>" <server_id> <wsrep_gtid_domain_id> "mariabackup password"
 ```
 
 ```bash
