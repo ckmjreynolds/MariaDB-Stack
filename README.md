@@ -342,92 +342,16 @@ sudo apt-get install proxysql mariadb-client-core-10.3
 # Configure ProxySQL.
 ./script/configureProxySQLNode.sh <proxysql admin pwd> <proxysql pwd> <primary db> <secondary db> <primary proxy> <secondary proxy>
 
-./script/configureProxySQLNode.sh URVR5UUGbhfSzPm8 252hSsNCr7VvkSbm db1.mssux.com db2.mssux.com proxysql1.mssux.com proxysql2.mssux.com
-
 # Start ProxySQL.
 sudo systemctl enable proxysql.service
 sudo systemctl start proxysql
 
 # Verify.
 mysql -h127.0.0.1 -P6032 -uradmin -p<password> --prompt "ProxySQL Admin>"
-
-mysql -h127.0.0.1 -P6032 -uradmin -pURVR5UUGbhfSzPm8 --prompt "ProxySQL Admin>"
 ```
 
 ```bash
 sudo mysql -e "select variable_name, variable_value from information_schema.global_status where variable_name in ('wsrep_cluster_size', 'wsrep_local_state_comment', 'wsrep_cluster_status', 'wsrep_incoming_addresses');"
-```
-
-wget https://download.newrelic.com/infrastructure_agent/binaries/linux/arm64/newrelic-infra_linux_1.12.6_arm64.tar.gz
-sudo systemctl status newrelic-infra
-
-# Monitoring: Add as remote instances as we are using arm64 instances and pmm2-client is not supported on arm64.
-# Add the New Relic Infrastructure Agent gpg key \
-curl -s https://download.newrelic.com/infrastructure_agent/gpg/newrelic-infra.gpg | sudo apt-key add - && \
-\
-# Create a configuration file and add your license key \
-echo "license_key: f20b184c3a0f78741a57270f1a32f25b8b0dNRAL" | sudo tee -a /etc/newrelic-infra.yml && \
-\
-# Create the agent’s yum repository \
-printf "deb [arch=arm64] https://download.newrelic.com/infrastructure_agent/linux/apt bionic main" | sudo tee -a /etc/apt/sources.list.d/newrelic-infra.list && \
-\
-# Update your apt cache \
-sudo apt-get update && \
-\
-# Run the installation script \
-sudo apt-get install newrelic-infra -y
-
-sudo apt-get install openjdk-8-jre nodejs nodejs-legacy
-LICENSE_KEY=f20b184c3a0f78741a57270f1a32f25b8b0dNRAL bash -c "$(curl -sSL https://download.newrelic.com/npi/release/install-npi-linux-debian-arm.sh)"
-```
-
-### 6.1 Setup Docker
-```bash
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-sudo usermod -aG docker $USER
-rm get-docker.sh
-```
-
-### [6.2 Move Docker to ZFS](https://docs.docker.com/storage/storagedriver/zfs-driver/)
-```bash
-sudo systemctl stop docker
-sudo rm -rf /var/lib/docker
-sudo zpool create -o ashift=12 -o autoexpand=on -O relatime=on -O compression=lz4 -f zpool-docker -m /var/lib/docker /dev/nvme1n1
-sudo wget -O /etc/docker/daemon.json https://raw.githubusercontent.com/ckmjreynolds/MariaDB-Stack/0.1.4/script/docker_daemon.json
-sudo systemctl start docker
-sudo docker info|grep zfs
-```
-
-### [6.3 Setup PMM](https://www.percona.com/doc/percona-monitoring-and-management/2.x/install/docker.html)
-```bash
-# Pull the latest 2.x image
-docker pull percona/pmm-server:2
-
-# Create a persistent data container.
-docker create --volume /srv --name pmm-data percona/pmm-server:2 /bin/true
-
-# Run the image to start PMM Server.
-docker run --detach --restart always --publish 443:443 --volumes-from pmm-data --name pmm-server percona/pmm-server:2
-```
-
-### [6.4 Setup SSL Encryption](https://hub.docker.com/r/certbot/dns-route53)
-```bash
-# Get SSL certificates.
-docker run -it --rm --name certbot -v "/etc/letsencrypt:/etc/letsencrypt" \
-    -v "/var/lib/letsencrypt:/var/lib/letsencrypt" certbot/dns-route53 \
-    certonly --dns-route53 -d monitor.<domain>
-
-# Copy the SSL certificates.
-sudo -i
-cp -L /etc/letsencrypt/live/monitor.<domain>/*.pem /home/ubuntu/.
-chown ubuntu:ubuntu /home/ubuntu/*.pem
-docker cp /home/ubuntu/fullchain.pem pmm-server:/srv/nginx/certificate.crt
-docker cp /home/ubuntu/privkey.pem pmm-server:/srv/nginx/certificate.key
-docker cp /home/ubuntu/chain.pem pmm-server:/srv/nginx/ca-certs.pem
-
-# Restart pmm-server.
-docker restart pmm-server
 ```
 
 ## X. Cleanup
@@ -435,7 +359,7 @@ docker restart pmm-server
 # Cleanup Instances
 INSTANCE5=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=proxysql2"|jq -r '.Reservations[].Instances[].InstanceId')
 INSTANCE4=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=proxysql1"|jq -r '.Reservations[].Instances[].InstanceId')
-INSTANCE3=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=db3"|jq -r '.Reservations[].Instances[].InstanceId')
+INSTANCE3=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=garb"|jq -r '.Reservations[].Instances[].InstanceId')
 INSTANCE2=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=db2"|jq -r '.Reservations[].Instances[].InstanceId')
 INSTANCE1=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=db1"|jq -r '.Reservations[].Instances[].InstanceId')
 aws ec2 terminate-instances --instance-ids ${INSTANCE1} ${INSTANCE2} ${INSTANCE3} ${INSTANCE4} ${INSTANCE5}
@@ -484,6 +408,8 @@ aws ec2 create-tags --tags "Key=Name,Value=default" --resources ${SG}
 # *********************************************************************************************************************
 ./script/delete-default-vpc.sh
 ```
+
+# END BELOW is scratch.
 
 # sudo killall -HUP mDNSResponder;sudo killall mDNSResponderHelper;sudo dscacheutil -flushcache
 https://medium.com/nttlabs/buildx-multiarch-2c6c2df00ca2
@@ -1284,3 +1210,53 @@ aws ec2 run-instances --key-name aws_chris_reynolds --instance-type t4g.micro --
     --iam-instance-profile Name="db-stack-role" \
     --credit-specification CpuCredits="unlimited" \
     --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=temp},{Key=Domain,Value=<domain>}]"
+
+
+### 6.1 Setup Docker
+```bash
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+sudo usermod -aG docker $USER
+rm get-docker.sh
+```
+
+### [6.2 Move Docker to ZFS](https://docs.docker.com/storage/storagedriver/zfs-driver/)
+```bash
+sudo systemctl stop docker
+sudo rm -rf /var/lib/docker
+sudo zpool create -o ashift=12 -o autoexpand=on -O relatime=on -O compression=lz4 -f zpool-docker -m /var/lib/docker /dev/nvme1n1
+sudo wget -O /etc/docker/daemon.json https://raw.githubusercontent.com/ckmjreynolds/MariaDB-Stack/0.1.4/script/docker_daemon.json
+sudo systemctl start docker
+sudo docker info|grep zfs
+```
+
+### [6.3 Setup PMM](https://www.percona.com/doc/percona-monitoring-and-management/2.x/install/docker.html)
+```bash
+# Pull the latest 2.x image
+docker pull percona/pmm-server:2
+
+# Create a persistent data container.
+docker create --volume /srv --name pmm-data percona/pmm-server:2 /bin/true
+
+# Run the image to start PMM Server.
+docker run --detach --restart always --publish 443:443 --volumes-from pmm-data --name pmm-server percona/pmm-server:2
+```
+
+### [6.4 Setup SSL Encryption](https://hub.docker.com/r/certbot/dns-route53)
+```bash
+# Get SSL certificates.
+docker run -it --rm --name certbot -v "/etc/letsencrypt:/etc/letsencrypt" \
+    -v "/var/lib/letsencrypt:/var/lib/letsencrypt" certbot/dns-route53 \
+    certonly --dns-route53 -d monitor.<domain>
+
+# Copy the SSL certificates.
+sudo -i
+cp -L /etc/letsencrypt/live/monitor.<domain>/*.pem /home/ubuntu/.
+chown ubuntu:ubuntu /home/ubuntu/*.pem
+docker cp /home/ubuntu/fullchain.pem pmm-server:/srv/nginx/certificate.crt
+docker cp /home/ubuntu/privkey.pem pmm-server:/srv/nginx/certificate.key
+docker cp /home/ubuntu/chain.pem pmm-server:/srv/nginx/ca-certs.pem
+
+# Restart pmm-server.
+docker restart pmm-server
+```

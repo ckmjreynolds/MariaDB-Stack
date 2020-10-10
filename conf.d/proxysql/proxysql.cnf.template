@@ -39,17 +39,11 @@ admin_variables=
 proxysql_servers=
 {
     {
-        hostname="${PRIMARY_PROXYSQL}"
+        hostname="${PROXYSQL_PEER}"
         port=6032
         weight=0
-        comment="${PRIMARY_PROXYSQL}"
-    },
-    {
-        hostname="${SECONDARY_PROXYSQL}"
-        port=6032
-        weight=0
-        comment="${SECONDARY_PROXYSQL}"
-    {}
+        comment="Peer."
+    }
 }
 
 mysql_variables=
