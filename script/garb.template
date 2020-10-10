@@ -27,18 +27,17 @@
 #  ----        ------  -----------
 #  2020-10-10  CDR     Initial Version
 # *********************************************************************************************************************
-[mariadb]
-binlog_format                   = ROW
-wsrep_on                        = ON
-wsrep_provider                  = /usr/lib/galera/libgalera_smm.so
-wsrep_cluster_name              = ${CLUSTER_NAME}
-wsrep_cluster_address           = ${WSREP_CLUSTER_ADDRESS}
-wsrep_node_address              = ${WSREP_NODE_ADDRESS}
-wsrep_sst_method                = mariabackup
-wsrep_sst_auth                  = "mariabackup:${MARIABACKUP_PASSWORD}"
-wsrep_provider_options          = ist.recv_bind=0.0.0.0;gcache.size=1G
+# This config file is to be sourced by garb service script.
 
-# Settings for replication between galera clusters.
-wsrep_gtid_domain_id            = ${WSREP_GTID_DOMAIN_ID}
-wsrep_gtid_mode                 = ON
-wsrep_auto_increment_control    = OFF
+# A comma-separated list of node addresses (address[:port]) in the cluster
+GALERA_NODES="${CLUSTER_NODES}"
+
+# Galera cluster name, should be the same as on the rest of the nodes.
+GALERA_GROUP="${CLUSTER_NAME}"
+
+# Optional Galera internal options string (e.g. SSL settings)
+# see http://galeracluster.com/documentation-webpages/galeraparameters.html
+# GALERA_OPTIONS=""
+
+# Log file for garbd. Optional, by default logs to syslog
+# LOG_FILE=""

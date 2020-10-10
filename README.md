@@ -1,13 +1,13 @@
 # MariaDB-Stack
 ## Example Deployment (AWS)
 ### Instances
-| Hostname    | Instance Type     | Disk Space        | Availability Zone | Operating System      | Description        |
-| :---------- | :---------------- | :---------------- | :---------------- |:--------------------- | :----------------- |
-| `proxysql1` | `t3.nano 0.5GB`   |                   | `us-east-1a`      | `Ubuntu 20.04.01 LTS` | `ProxySQL Node #1` |
-| `proxysql2` | `t3.nano 0.5GB`   |                   | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | `ProxySQL Node #2` |
-| `db1`       | `c6gd.medium 2GB` |                   | `us-east-1a`      | `Ubuntu 20.04.01 LTS` | `Galera Node #1`   |
-| `db2`       | `c6gd.medium 2GB` |                   | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | `Galera Node #2`   |
-| `db3`       | `c6gd.medium 2GB` |                   | `us-east-1c`      | `Ubuntu 20.04.01 LTS` | `Galera Node #3`   |
+| Hostname    | Instance Type     | Disk Space        | Availability Zone | Operating System      | Description         |
+| :---------- | :---------------- | :---------------- | :---------------- |:--------------------- | :------------------ |
+| `proxysql1` | `t3.nano 0.5GB`   |                   | `us-east-1a`      | `Ubuntu 20.04.01 LTS` | `ProxySQL Node #1`  |
+| `proxysql2` | `t3.nano 0.5GB`   |                   | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | `ProxySQL Node #2`  |
+| `db1`       | `c6gd.medium 2GB` |                   | `us-east-1a`      | `Ubuntu 20.04.01 LTS` | `Galera Node #1`    |
+| `db2`       | `c6gd.medium 2GB` |                   | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | `Galera Node #2`    |
+| `garb`      | `t4g.micro 1GB`   |                   | `us-east-1c`      | `Ubuntu 20.04.01 LTS` | `Galera Arbitrator` |
 
 ## 1. Clone this Repository
 ```bash
@@ -72,7 +72,7 @@ aws iam add-role-to-instance-profile --instance-profile-name db-stack-profile --
 ## 5. Create AMIs for Ubuntu 20.04 LTS - 64-bit x86 and 64-bit Arm
 ```bash
 # Ubuntu Server 20.04 LTS (HVM), SSD Volume Type - ami-0dba2cb6798deb6d8 (64-bit x86) / ami-0ea142bd244023692 (64-bit Arm)
-# Ubuntu Server 20.04 LTS amd64 - ami-06237a734a732987c
+# Ubuntu Server 20.04 LTS amd64 - ami-0786791f6e8a47967
 aws ec2 run-instances --key-name <ssh_key> --instance-type t3.nano --image-id ami-0dba2cb6798deb6d8 \
     --security-group-ids $(aws ec2 describe-security-groups --group-name db-database-sg|jq -r '.SecurityGroups[].GroupId') \
     --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1a"|jq -r '.Subnets[].SubnetId') \
@@ -80,7 +80,7 @@ aws ec2 run-instances --key-name <ssh_key> --instance-type t3.nano --image-id am
     --credit-specification CpuCredits="unlimited" \
     --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=amd64},{Key=Domain,Value=<domain>}]"
 
-# Ubuntu Server 20.04 LTS arm64 - ami-0e9f3a26099cdb584
+# Ubuntu Server 20.04 LTS arm64 - ami-08f51af0a56da05bb
 aws ec2 run-instances --key-name <ssh_key> --instance-type t4g.nano --image-id ami-0ea142bd244023692 \
     --security-group-ids $(aws ec2 describe-security-groups --group-name db-database-sg|jq -r '.SecurityGroups[].GroupId') \
     --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1a"|jq -r '.Subnets[].SubnetId') \
@@ -96,44 +96,50 @@ cd MariaDB-Stack
 sudo timedatectl set-timezone America/Chicago
 
 # Install packages.
-sudo apt-get update; sudo apt-get install --yes screen zfsutils-linux s3fs cloud-utils ec2-api-tools p7zip-full
+sudo apt-get update; sudo apt-get install --yes zfsutils-linux p7zip-full screen cloud-utils ec2-api-tools s3fs
 
 # Install cli53.
-sudo wget -O /usr/local/bin/cli53 https://github.com/barnybug/cli53/releases/download/0.8.17/cli53-linux-amd64
+sudo cp install/cli53-linux-amd64 /usr/local/bin/cli53
 # OR
-sudo wget -O /usr/local/bin/cli53 https://github.com/barnybug/cli53/releases/download/0.8.17/cli53-linux-arm64
+sudo cp install/cli53-linux-arm64 /usr/local/bin/cli53
+
 sudo chmod +x /usr/local/bin/cli53
 
 # Install registerRoute53.sh script.
-sudo wget -O /usr/local/bin/registerRoute53.sh https://raw.githubusercontent.com/ckmjreynolds/MariaDB-Stack/0.1.4/script/registerRoute53.sh
+sudo cp script/registerRoute53.sh /usr/local/bin/registerRoute53.sh
 sudo chmod +x /usr/local/bin/registerRoute53.sh
 
 # Schedule the script to run on reboot.
-(wget -O - https://raw.githubusercontent.com/ckmjreynolds/MariaDB-Stack/0.1.4/script/crontab)| sudo crontab -
+(cat script/crontab)| sudo crontab -
 (sudo crontab -l; echo "@reboot /usr/local/bin/registerRoute53.sh")| sudo crontab -
 
 # Install S3 File System (for backups)
 sudo -i
 mkdir /mnt/backup
 echo 's3fs#<bucket> /mnt/backup fuse _netdev,allow_other,iam_role=auto,storage_class=intelligent_tiering 0 0' >> /etc/fstab
+exit
 
-Q: Why does my AWS S3 bill cost a lot more than the storage fee?
-
-* A: ListBucket and HeadObject API calls were being made updatedb (and located).  Solution: Add your mount point to PRUNEPATHS in /etc/updatedb.conf so updatedb does not include this when it scans
-
+# Install the Unified Cloud Watch Agent.
+wget https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
+# OR
 wget https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/arm64/latest/amazon-cloudwatch-agent.deb
+
 sudo dpkg -i -E ./amazon-cloudwatch-agent.deb
 sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-config-wizard
 sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a start
+sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a status
 
 # Reboot the server and verify DNS entry is added/updated and s3 bucket mounted.
-reboot
+sudo reboot
 
 # If everything is working, patch the server, shutdown and create an AMI.
 sudo apt-get update
 sudo apt-get upgrade --with-new-pkgs
 sudo apt-get clean
+rm -rf /home/ubuntu/MariaDB-Stack
 sudo shutdown now
+
+# Create the AMIs.
 
 # Terminate the instances.
 AMD64=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=amd64"|jq -r '.Reservations[].Instances[].InstanceId')
@@ -141,16 +147,40 @@ ARM64=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=arm64"|jq -r 
 aws ec2 terminate-instances --instance-ids ${AMD64} ${ARM64}
 ```
 
-## 6. Create the `monitor` EC2 Instance
+## 6. Create the `garb` EC2 Instance
 ```bash
-# Ubuntu Server 20.04 LTS amd64 - ami-06237a734a732987c
-aws ec2 run-instances --key-name <ssh_key> --instance-type t3.small --image-id ami-06237a734a732987c \
-    --security-group-ids $(aws ec2 describe-security-groups --group-name db-monitor-sg|jq -r '.SecurityGroups[].GroupId') \
+# Ubuntu Server 20.04 LTS arm64 - ami-08f51af0a56da05bb
+aws ec2 run-instances --key-name <ssh_key> --instance-type t4g.micro --image-id ami-08f51af0a56da05bb \
+    --security-group-ids $(aws ec2 describe-security-groups --group-name db-database-sg|jq -r '.SecurityGroups[].GroupId') \
     --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1c"|jq -r '.Subnets[].SubnetId') \
-    --block-device-mappings "DeviceName=/dev/sdb,Ebs={DeleteOnTermination=true,VolumeSize=10,VolumeType=gp2}" \
     --iam-instance-profile Name="db-stack-profile" \
     --credit-specification CpuCredits="unlimited" \
-    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=monitor},{Key=Domain,Value=<domain>}]"
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=garb},{Key=Domain,Value=<domain>}]"
+
+# Install the MariaDB repository.
+curl -LsS https://downloads.mariadb.com/MariaDB/mariadb_repo_setup | sudo bash -s -- --skip-maxscale --skip-tools
+
+# Install Galera Arbitrator
+sudo apt-get install --yes galera-arbitrator-4
+
+# Configure Galera Arbitrator
+export CLUSTER_NODES=${CLUSTER_NODES}
+export GALERA_GROUP=${CLUSTER_NAME}
+
+export CLUSTER_NODES="db1.mssux.com:4567, db2.mssux.com:4567"
+export GALERA_GROUP="mssux_dbcluster"
+envsubst < ./script/garb.template > /etc/default/garb
+
+sudo sed -i.bak 's/^\(# GALERA_NODES=.*\)/GALERA_NODES="db1.:4567, 192.168.70.62:4567, 192.168.70.63:4567"\1/g' /etc/default/garb
+sudo sed -i.bak 's/^\(expire.*\)/#\1/g' /etc/mysql/mariadb.conf.d/50-server.cnf
+
+# Ubuntu Server 20.04 LTS arm64 - ami-08f51af0a56da05bb
+aws ec2 run-instances --key-name aws_chris_reynolds --instance-type t4g.micro --image-id ami-08f51af0a56da05bb \
+    --security-group-ids $(aws ec2 describe-security-groups --group-name db-database-sg|jq -r '.SecurityGroups[].GroupId') \
+    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1c"|jq -r '.Subnets[].SubnetId') \
+    --iam-instance-profile Name="db-stack-profile" \
+    --credit-specification CpuCredits="unlimited" \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=garb},{Key=Domain,Value=mssux.com}]"
 ```
 
 ### 6.1 Setup Docker

@@ -1,5 +1,5 @@
 #!/bin/bash
-# **************************************************************************************
+# *********************************************************************************************************************
 # MIT License
 #
 # Copyright (c) 2019, 2020 Chris Reynolds
@@ -26,13 +26,14 @@
 #
 #  Date        Author  Description
 #  ----        ------  -----------
-#  2020-09-05  CDR     Initial Version
-# **************************************************************************************
+#  2020-10-10  CDR     Initial Version
+# *********************************************************************************************************************
 if [ -z "$*" ]; then
 	echo "USAGE: configureNode.sh"
 	echo "	<FQDN> - This node's fully qualified domain name."
 	echo "	<gtid_domain_id> - The gtid_domain_id for this node (unique)."
 	echo "	<auto_increment_offset> - The auto_increment_offset for this node (unique)."
+	echo "	<cluster_name> - The name of this cluster."
 	echo "	<wsrep_cluster_address> - The wsrep_cluster_address."
 	echo "	<server_id> - The server_id for this Galera cluster."
 	echo "	<wsrep_gtid_domain_id> - The wsrep_gtid_domain_id for this Galera cluster."
@@ -43,10 +44,11 @@ fi
 export WSREP_NODE_ADDRESS=$1
 export GTID_DOMAIN_ID=$2
 export AUTO_INCREMENT_OFFSET=$3
-export WSREP_CLUSTER_ADDRESS=$4
-export SERVER_ID=$5
-export WSREP_GTID_DOMAIN_ID=$6
-export MARIABACKUP_PASSWORD=$7
+export CUSTER_NAME=$4
+export WSREP_CLUSTER_ADDRESS=$5
+export SERVER_ID=$6
+export WSREP_GTID_DOMAIN_ID=$7
+export MARIABACKUP_PASSWORD=$8
 
 # Replace placeholders in the .cfg files.
 for f in ./conf.d/*.template; do
