@@ -303,24 +303,38 @@ aws ec2 run-instances --key-name <ssh_key> --instance-type t3.nano --image-id am
     --block-device-mappings "DeviceName=/dev/sdb,Ebs={DeleteOnTermination=true,VolumeSize=1,VolumeType=gp2}" \
     --iam-instance-profile Name="db-stack-profile" \
     --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=proxysql2},{Key=Domain,Value=<domain>}]"
+
+aws ec2 run-instances --key-name aws_chris_reynolds --instance-type t3.nano --image-id ami-0786791f6e8a47967 \
+    --security-group-ids $(aws ec2 describe-security-groups --group-name db-proxysql-sg|jq -r '.SecurityGroups[].GroupId') \
+    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1a"|jq -r '.Subnets[].SubnetId') \
+    --block-device-mappings "DeviceName=/dev/sdb,Ebs={DeleteOnTermination=true,VolumeSize=1,VolumeType=gp2}" \
+    --iam-instance-profile Name="db-stack-profile" \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=proxysql1},{Key=Domain,Value=mssux.com}]"
+
+aws ec2 run-instances --key-name aws_chris_reynolds --instance-type t3.nano --image-id ami-0786791f6e8a47967 \
+    --security-group-ids $(aws ec2 describe-security-groups --group-name db-proxysql-sg|jq -r '.SecurityGroups[].GroupId') \
+    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1b"|jq -r '.Subnets[].SubnetId') \
+    --block-device-mappings "DeviceName=/dev/sdb,Ebs={DeleteOnTermination=true,VolumeSize=1,VolumeType=gp2}" \
+    --iam-instance-profile Name="db-stack-profile" \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=proxysql2},{Key=Domain,Value=mssux.com}]"
 ```
 
-### 7.1 Setup Docker
+### 7.1 Setup Mount
 ```bash
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-sudo usermod -aG docker $USER
-rm get-docker.sh
+# Setup the mount for ProxySQL.
+sudo zpool create -o ashift=12 -o autoexpand=on -O relatime=on -O compression=lz4 -f zpool-proxysql -m /var/lib/proxysql /dev/nvme1n1
 ```
 
-### [7.2 Move Docker to ZFS](https://docs.docker.com/storage/storagedriver/zfs-driver/)
+### 7.2 Install ProxySQL
 ```bash
-sudo systemctl stop docker
-sudo rm -rf /var/lib/docker
-sudo zpool create -o ashift=12 -o autoexpand=on -O relatime=on -O compression=lz4 -f zpool-docker -m /var/lib/docker /dev/nvme1n1
-sudo cp ./conf.d/docker/docker_daemon.json /etc/docker/daemon.json
-sudo systemctl start docker
-sudo docker info|grep zfs
+# Setup the repository.
+wget -O - 'https://repo.proxysql.com/ProxySQL/repo_pub_key' | sudo apt-key add -
+echo deb https://repo.proxysql.com/ProxySQL/proxysql-2.0.x/$(lsb_release -sc)/ ./ \
+    | sudo tee /etc/apt/sources.list.d/proxysql.list
+
+# Install ProxySQL
+sudo apt-get update
+sudo apt-get install proxysql mariadb-client-core-10.3
 ```
 
 ### 7.3 Setup ProxySQL
@@ -329,7 +343,11 @@ sudo docker info|grep zfs
 ./script/configureProxySQLNode.sh <proxysql admin pwd> <proxysql pwd> <primary db> <secondary db>
 
 ./script/configureProxySQLNode.sh URVR5UUGbhfSzPm8 252hSsNCr7VvkSbm db1.mssux.com db2.mssux.com
-./script/configureProxySQLNode.sh URVR5UUGbhfSzPm8 252hSsNCr7VvkSbm db2.mssux.com db1.mssux.com
+
+# Start ProxySQL.
+
+# Verify.
+mysql -h127.0.0.1 -P6032 -uradmin -p<password> --prompt "ProxySQL Admin>"
 ```
 
 ```bash
