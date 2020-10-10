@@ -241,7 +241,9 @@ rm -rf MariaDB-Stack
 
 ### 6.3. Setup Backups
 ```bash
-
+# m h  dom mon dow   command
+(sudo crontab -l; echo "0 2 * * * /home/ubuntu/MariaDB-Stack/script/backup.sh <mariabackup pwd> <encryption key>")| sudo crontab -
+(sudo crontab -l; echo "35 14 * * * /home/ubuntu/MariaDB-Stack/script/backup.sh s9z7M5haCuTKxj43 dRztSx9fH7BQ6brW")| sudo crontab -
 ```
 
 

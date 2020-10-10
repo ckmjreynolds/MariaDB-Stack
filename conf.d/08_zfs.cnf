@@ -25,7 +25,7 @@
 #
 #  Date        Author  Description
 #  ----        ------  -----------
-#  2020-09-27  CDR     Initial Version
+#  2020-10-10  CDR     Initial Version
 # *********************************************************************************************************************
 [mariadb]
 # In addition to optimisation on the ZFS side, there are also optimisations we can make on the MySQL side, to take maximum possible advantage of what ZFS offers.
@@ -40,4 +40,4 @@ innodb_doublewrite=0
 
 # InnoDB records a checksum in each page. This is important for detecting data corruption on traditional storage stacks, but ZFS already does the same thing
 # – it computes and stores the checksum of eack block. Doing it at InnoDB level as well is therefore rendered redundant and can be disabled for a small CPU saving.
-innodb_checksum_algorithm=none
+# innodb_checksum_algorithm=none
