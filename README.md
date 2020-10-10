@@ -190,16 +190,12 @@ sudo mysql
 MariaDB [(none)]> SOURCE ./initdb.d/001_CREATE_USERS.sql
 MariaDB [(none)]> exit
 
-# Stop and disable MariaDB for now.
+# Stop MariaDB for now.
 sudo systemctl stop mariadb
-sudo systemctl disable mariadb
 
 # Setup this Node
 ./script/configureNode.sh <node>.<domain> <gtid_domain_id> <auto_increment_offset> \
     "gcomm://db1.<domain>,db2.<domain>,db3.<domain>" <server_id> <wsrep_gtid_domain_id> "mariabackup password"
-
-./script/configureNode.sh db1.mssux.com 100 1 "mssux_dbcluster" "gcomm://db1.mssux.com,db2.mssux.com,garb.mssux.com" 1 1000 "s9z7M5haCuTKxj43"
-./script/configureNode.sh db2.mssux.com 200 2 "mssux_dbcluster" "gcomm://db1.mssux.com,db2.mssux.com,garb.mssux.com" 2 1000 "s9z7M5haCuTKxj43"
 
 # Bootstrap (on db1) or start (on db2) mariadb.
 sudo systemctl enable mariadb
@@ -207,6 +203,8 @@ sudo systemctl enable mariadb
 sudo galera_new_cluster
 # OR
 sudo systemctl start mariadb
+
+sudo systemctl status mariadb.service
 ```
 
 ### 6.2. Create the `garb` EC2 Instance
@@ -226,17 +224,14 @@ curl -LsS https://downloads.mariadb.com/MariaDB/mariadb_repo_setup | sudo bash -
 sudo apt-get install --yes galera-arbitrator-4
 
 # Configure Galera Arbitrator
+sudo -i
 export CLUSTER_NODES="db1.<domain>:4567, db2.<domain>:4567"
 export GALERA_GROUP="<cluster name>"
-
-sudo -i
-export CLUSTER_NODES="db1.mssux.com:4567, db2.mssux.com:4567"
-export CLUSTER_NAME="mssux_dbcluster"
 envsubst < /home/ubuntu/MariaDB-Stack/script/garb.template > /etc/default/garb
 exit
 
 # Start Galera Arbitrator
-sudo systemctl disable garb.service
+sudo systemctl enable garb.service
 sudo systemctl start garb
 sudo systemctl status garb.service
 
@@ -244,6 +239,16 @@ sudo systemctl status garb.service
 rm -rf MariaDB-Stack
 ```
 
+### 6.3. Setup Backups
+```bash
+
+```
+
+
+
+```bash
+sudo mysql -e "select variable_name, variable_value from information_schema.global_status where variable_name in ('wsrep_cluster_size', 'wsrep_local_state_comment', 'wsrep_cluster_status', 'wsrep_incoming_addresses');"
+```
 
 wget https://download.newrelic.com/infrastructure_agent/binaries/linux/arm64/newrelic-infra_linux_1.12.6_arm64.tar.gz
 sudo systemctl status newrelic-infra

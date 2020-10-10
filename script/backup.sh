@@ -1,5 +1,5 @@
 #!/bin/bash
-# **************************************************************************************
+# *********************************************************************************************************************
 # MIT License
 #
 # Copyright (c) 2019 Chris Reynolds
@@ -27,17 +27,12 @@
 #  Date        Author  Description
 #  ----        ------  -----------
 #  2020-10-03  CDR     Initial Version
-# **************************************************************************************
-BACKUPDIR=/mnt/backup
-TARGETFILE=$BACKUPDIR/`date +%F_%H-%M-%S`.${HOSTNAME}.xb.gz.enc
+# *********************************************************************************************************************
+BACKUPDIR=/mnt/backup/${HOSTNAME}
+TARGETFILE=${BACKUPDIR}/`date +%F_%H-%M-%S`.${HOSTNAME}.xb.7z
+mkdir -p ${BACKUPDIR}
+
 
 # Create a FULL, compressed, encrypted backup.
-mariabackup --backup --stream=xbstream | gzip | openssl  enc -aes-256-cbc -k $1 > $TARGETFILE
-
-# Delete old backups
-# for DEL in `find $BACKUPDIR -maxdepth 1 -type f -mmin +$(( 30 * 24 * 60 )) -printf "%P\n"`
-# do
-#  echo "deleting $DEL"
-#  rm -rf $BACKUPDIR/$DEL
-#done
+mariabackup --user=mariabackup --password=${1} --backup --stream=xbstream | 7z a -si -p${2} -v1g ${TARGETFILE}
 exit 0
