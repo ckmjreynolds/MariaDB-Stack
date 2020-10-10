@@ -187,7 +187,7 @@ sudo mysql_secure_installation
 # Setup Users
 ./script/configureUsers.sh <mariabackup password> <proxysql password>
 sudo mysql
-MariaDB [(none)]> SOURCE MariaDB-Stack/initdb.d/001_CREATE_USERS.sql
+MariaDB [(none)]> SOURCE ./initdb.d/001_CREATE_USERS.sql
 MariaDB [(none)]> exit
 
 # Stop and disable MariaDB for now.
@@ -198,11 +198,10 @@ sudo systemctl disable mariadb
 ./script/configureNode.sh <node>.<domain> <gtid_domain_id> <auto_increment_offset> \
     "gcomm://db1.<domain>,db2.<domain>,db3.<domain>" <server_id> <wsrep_gtid_domain_id> "mariabackup password"
 
-./script/configureNode.sh db1.mssux.com 100 1 "gcomm://db1.mssux.com,db2.mssux.com,db3.mssux.com" 1 1000 "s9z7M5haCuTKxj43"
-./script/configureNode.sh db2.mssux.com 200 2 "gcomm://db1.mssux.com,db2.mssux.com,db3.mssux.com" 2 1000 "s9z7M5haCuTKxj43"
-./script/configureNode.sh db3.mssux.com 300 3 "gcomm://db1.mssux.com,db2.mssux.com,db3.mssux.com" 3 1000 "s9z7M5haCuTKxj43"
+./script/configureNode.sh db1.mssux.com 100 1 "mssux_dbcluster" "gcomm://db1.mssux.com,db2.mssux.com,garb.mssux.com" 1 1000 "s9z7M5haCuTKxj43"
+./script/configureNode.sh db2.mssux.com 200 2 "mssux_dbcluster" "gcomm://db1.mssux.com,db2.mssux.com,garb.mssux.com" 2 1000 "s9z7M5haCuTKxj43"
 
-# Bootstrap (on db1) or start (on db2, db3) mariadb.
+# Bootstrap (on db1) or start (on db2) mariadb.
 sudo systemctl enable mariadb
 
 sudo galera_new_cluster
