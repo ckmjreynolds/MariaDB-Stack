@@ -34,6 +34,8 @@ if [ -z "$*" ]; then
 	echo "	<proxysql pwd> - The password for the proxysql user on the Galera nodes."
 	echo "  <primary db> - The primary DB node for this ProxySQL instance."
 	echo "  <secondary db> - The primary DB node for this ProxySQL instance."
+	echo "  <primary proxy> - The primary ProxySQL node."
+	echo "  <secondary proxy> - The secondary ProxySQL node."
 	exit 0
 fi
 
@@ -41,6 +43,8 @@ export PROXYSQL_ADMIN_PASSWORD=$1
 export PROXYSQL_PASSWORD=$2
 export PRIMARY_DB=$3
 export SECONDARY_DB=$4
+export PRIMARY_PROXYSQL=$3
+export SECONDARY_PROXYSQL=$4
 
 # Replace placeholders in the .cfg files.
 for f in ./conf.d/proxysql/*.cnf.template; do

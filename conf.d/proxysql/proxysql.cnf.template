@@ -36,6 +36,22 @@ admin_variables=
     cluster_password="${PROXYSQL_ADMIN_PASSWORD}"
 }
 
+proxysql_servers=
+{
+    {
+        hostname="${PRIMARY_PROXYSQL}"
+        port=6032
+        weight=0
+        comment="${PRIMARY_PROXYSQL}"
+    },
+    {
+        hostname="${SECONDARY_PROXYSQL}"
+        port=6032
+        weight=0
+        comment="${SECONDARY_PROXYSQL}"
+    {}
+}
+
 mysql_variables=
 {
     monitor_username="proxysql"

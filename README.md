@@ -340,14 +340,18 @@ sudo apt-get install proxysql mariadb-client-core-10.3
 ### 7.3 Setup ProxySQL
 ```bash
 # Configure ProxySQL.
-./script/configureProxySQLNode.sh <proxysql admin pwd> <proxysql pwd> <primary db> <secondary db>
+./script/configureProxySQLNode.sh <proxysql admin pwd> <proxysql pwd> <primary db> <secondary db> <primary proxy> <secondary proxy>
 
-./script/configureProxySQLNode.sh URVR5UUGbhfSzPm8 252hSsNCr7VvkSbm db1.mssux.com db2.mssux.com
+./script/configureProxySQLNode.sh URVR5UUGbhfSzPm8 252hSsNCr7VvkSbm db1.mssux.com db2.mssux.com proxysql1.mssux.com proxysql2.mssux.com
 
 # Start ProxySQL.
+sudo systemctl enable proxysql.service
+sudo systemctl start proxysql
 
 # Verify.
 mysql -h127.0.0.1 -P6032 -uradmin -p<password> --prompt "ProxySQL Admin>"
+
+mysql -h127.0.0.1 -P6032 -uradmin -pURVR5UUGbhfSzPm8 --prompt "ProxySQL Admin>"
 ```
 
 ```bash
