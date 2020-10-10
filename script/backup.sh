@@ -2,7 +2,7 @@
 # *********************************************************************************************************************
 # MIT License
 #
-# Copyright (c) 2019 Chris Reynolds
+# Copyright (c) 2019, 2020 Chris Reynolds
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -26,7 +26,7 @@
 #
 #  Date        Author  Description
 #  ----        ------  -----------
-#  2020-10-03  CDR     Initial Version
+#  2020-10-10  CDR     Initial Version
 # *********************************************************************************************************************
 BACKUPDIR=/mnt/backup/${HOSTNAME}
 TARGETFILE=${BACKUPDIR}/`date +%F_%H-%M-%S`.${HOSTNAME}.xb.7z
