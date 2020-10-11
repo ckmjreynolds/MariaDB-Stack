@@ -30,12 +30,12 @@
 [mariadb]
 # The current RDS MySQL max_connections setting is default by
 # {DBInstanceClassMemory/12582880}, if you use c6gd.medium with 2GB RAM
-# the max_connections could be (2*1024*1024*1024)/12582880 ~= 170.
-max_connections         = 170
+# the max_connections could be (1*1024*1024*1024)/12582880 ~= 85.
+max_connections         = 85
 
 # {DBInstanceClassMemory*3/4}
-innodb_buffer_pool_size = 1536M
+innodb_buffer_pool_size = 768M
 
 # "you’ll want to set a combined total size to be at least 1/4... of the InnoDB buffer pool size"
 # innodb_log_files_in_group - Deprecated and ignored from MariaDB 10.5.2
-innodb_log_file_size    = 384M
+innodb_log_file_size    = 192M

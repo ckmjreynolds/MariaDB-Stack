@@ -1,13 +1,17 @@
 # MariaDB-Stack
+Here, we document a simplified reference implementation of a database stack consisting of two Galera nodes running MariaDB arbitrated by Galera Arbitrator on a third node. A two-node ProxySQL cluster provides load balancing. The design assumes highly-reliable but expensive block storage (EBS, SAN, etc.), which argues for the third Galera Arbitrator node instead of a traditional Galera node. This assumption is also the driver for the use of ZFS and compression.
+
 ## Example Deployment (AWS)
+We leverage t4g.micro instances where possible since AWS is currently offering a free trial, these instances are cheaper in any case, and MariaDB fully supports the aarch64 architecture. We use t3.nano instances for the ProxySQL nodes since it is not currently released for aarch64. We use s3 for backups since it is considerably cheaper than EBS or EFS.
+
 ### Instances
-| Hostname    | Instance Type     | Disk Space        | Availability Zone | Operating System      | Description         |
-| :---------- | :---------------- | :---------------- | :---------------- |:--------------------- | :------------------ |
-| `proxysql1` | `t3.nano 0.5GB`   |                   | `us-east-1a`      | `Ubuntu 20.04.01 LTS` | `ProxySQL Node #1`  |
-| `proxysql2` | `t3.nano 0.5GB`   |                   | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | `ProxySQL Node #2`  |
-| `db1`       | `c6gd.medium 2GB` |                   | `us-east-1a`      | `Ubuntu 20.04.01 LTS` | `Galera Node #1`    |
-| `db2`       | `c6gd.medium 2GB` |                   | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | `Galera Node #2`    |
-| `garb`      | `t4g.micro 1GB`   |                   | `us-east-1c`      | `Ubuntu 20.04.01 LTS` | `Galera Arbitrator` |
+| Hostname    | Instance Type   | Disk Space    | Availability Zone | Operating System      | Description                |
+| :---------- | :-------------- | :------------ | :---------------- |:--------------------- | :------------------------- |
+| `proxysql1` | `t3.nano 0.5GB` | `8GB / 1GB`   | `us-east-1a`      | `Ubuntu 20.04.01 LTS` | `ProxySQL v2.0.14 Node #1` |
+| `proxysql2` | `t3.nano 0.5GB` | `8GB / 1GB`   | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | `ProxySQL v2.0.14 Node #2` |
+| `db1`       | `t4g.micro 1GB` | `8GB / 10GB`  | `us-east-1a`      | `Ubuntu 20.04.01 LTS` | `MariaDB 10.5.6 Node #1`   |
+| `db2`       | `t4g.micro 1GB` | `8GB / 10GB`  | `us-east-1b`      | `Ubuntu 20.04.01 LTS` | `MariaDB 10.5.6 Node #2`   |
+| `garb`      | `t4g.micro 1GB` | `8GB`         | `us-east-1c`      | `Ubuntu 20.04.01 LTS` | `Galera Arbitrator Node`   |
 
 ## 1. Clone this Repository
 ```bash
@@ -55,12 +59,13 @@ aws s3api create-bucket --bucket ${BUCKET} --acl private
 # Note: The policy allows access to the s3 bucket as well as the ability to update DNS records.
 export BUCKET=$(aws sts get-caller-identity|jq -r '.Account')-db-backups
 export ZONEID=<Your hosted zone ID>
-envsubst < ./script/IAM_policy.template > ./script/IAM_policy.json
-aws iam create-policy --policy-name db-stack-policy --policy-document file://./script/IAM_policy.json
-rm ./script/IAM_policy.json
+
+envsubst < ./conf.d/IAM/IAM_policy.template > ./conf.d/IAM/IAM_policy.json
+aws iam create-policy --policy-name db-stack-policy --policy-document file://./conf.d/IAM/IAM_policy.json
+rm ./conf.d/IAM/IAM_policy.json
 
 # Create a role with the given policy.
-aws iam create-role --role-name db-stack-role --assume-role-policy-document file://./script/trust.json
+aws iam create-role --role-name db-stack-role --assume-role-policy-document file://./conf.d/IAM/trust.json
 aws iam attach-role-policy --role-name db-stack-role \
     --policy-arn arn:aws:iam::$(aws sts get-caller-identity|jq -r '.Account'):policy/db-stack-policy
 
@@ -150,24 +155,21 @@ aws ec2 terminate-instances --instance-ids ${AMD64} ${ARM64}
 ## 6. Create the Galera EC2 Instanes
 ```bash
 # Ubuntu Server 20.04 LTS arm64 - ami-08f51af0a56da05bb
-aws ec2 run-instances --key-name <ssh_key> --instance-type c6gd.medium --image-id ami-08f51af0a56da05bb \
+aws ec2 run-instances --key-name <ssh_key> --instance-type t4g.micro --image-id ami-08f51af0a56da05bb \
     --security-group-ids $(aws ec2 describe-security-groups --group-name db-database-sg|jq -r '.SecurityGroups[].GroupId') \
     --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1a"|jq -r '.Subnets[].SubnetId') \
+    --block-device-mappings "DeviceName=/dev/sdb,Ebs={DeleteOnTermination=true,VolumeSize=10,VolumeType=gp2}" \
     --iam-instance-profile Name="db-stack-profile" \
+    --credit-specification CpuCredits="unlimited" \
     --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=db1},{Key=Domain,Value=<domain>}]"
-
-aws ec2 run-instances --key-name <ssh_key> --instance-type c6gd.medium --image-id ami-08f51af0a56da05bb \
-    --security-group-ids $(aws ec2 describe-security-groups --group-name db-database-sg|jq -r '.SecurityGroups[].GroupId') \
-    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1b"|jq -r '.Subnets[].SubnetId') \
-    --iam-instance-profile Name="db-stack-profile" \
-    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=db2},{Key=Domain,Value=<domain>}]"
 
 aws ec2 run-instances --key-name <ssh_key> --instance-type t4g.micro --image-id ami-08f51af0a56da05bb \
     --security-group-ids $(aws ec2 describe-security-groups --group-name db-database-sg|jq -r '.SecurityGroups[].GroupId') \
-    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1c"|jq -r '.Subnets[].SubnetId') \
+    --subnet-id $(aws ec2 describe-subnets --filter "Name=availability-zone,Values=us-east-1b"|jq -r '.Subnets[].SubnetId') \
+    --block-device-mappings "DeviceName=/dev/sdb,Ebs={DeleteOnTermination=true,VolumeSize=10,VolumeType=gp2}" \
     --iam-instance-profile Name="db-stack-profile" \
     --credit-specification CpuCredits="unlimited" \
-    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=garb},{Key=Domain,Value=<domain>}]"
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=db2},{Key=Domain,Value=<domain>}]"
 ```
 
 ## 6.1. Create the Galera Nodes
