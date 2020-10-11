@@ -1,7 +1,7 @@
 # **************************************************************************************
 # MIT License
 #
-# Copyright (c) 2019 Chris Reynolds
+# Copyright (c) 2019, 2020 Chris Reynolds
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -25,7 +25,16 @@
 #
 #  Date        Author  Description
 #  ----        ------  -----------
-#  2019-12-23  CDR     Initial Version
+#  2020-10-10  CDR     Initial Version
 # **************************************************************************************
 .DS_Store
-data/
+
+# Don't save files generated from templates.
+conf.d/garb/garb
+conf.d/IAM/IAM_policy.json
+conf.d/mysql/05_galera.cnf
+conf.d/mysql/07_replication.cnf
+conf.d/proxysql/proxysql.cnf
+initdb.d/001_CREATE_USERS.sql
+conf.d/mysql/05_galera.cnf
+

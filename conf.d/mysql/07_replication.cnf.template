@@ -1,0 +1,61 @@
+# *********************************************************************************************************************
+# MIT License
+#
+# Copyright (c) 2019, 2020 Chris Reynolds
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+#
+#  History:
+#
+#  Date        Author  Description
+#  ----        ------  -----------
+#  2020-09-06  CDR     Initial Version
+# *********************************************************************************************************************
+[mariadb]
+# unique per replica Integer value used to identify the instance in a replication group
+server_id                   = ${SERVER_ID}
+gtid_domain_id              = ${GTID_DOMAIN_ID}
+
+# Location of binary and relay logs.
+log_bin                     = mysql-bin
+relay_log                   = relay-bin
+expire_logs_days            = 7
+
+# Hostname or IP of the slave to be reported to the master during slave registration.
+report_host                 = ${WSREP_NODE_ADDRESS}
+
+# ROW is safest but results in large binlogs (required for Galera).
+# MIXED is safe and results in smaller binlogs than ROW
+# STATEMENT is not safe.
+binlog_format               = ROW
+
+# A value of 10 is reasonable and has the advantage of allowing determination of the source
+# by simply looking at ID mod 10 (i.e. the ones place).
+auto_increment_increment    = 10
+
+# The offset for all AUTO_INCREMENT values on the server, by default 1. Intended for use
+# in master-to-master replication. Should be smaller than auto_increment_increment, except
+# when both variables are 1 (default setup).
+auto_increment_offset       = ${AUTO_INCREMENT_OFFSET}
+
+# Set to 1 if you want to daisy-chain the slaves.
+log_slave_updates           = ON
+
+# Attempt to recover vs. re-pull relay logs.
+relay_log_recovery          = ON
