@@ -37,14 +37,14 @@ admin_variables=
 }
 
 proxysql_servers=
-{
+(
     {
         hostname="${PROXYSQL_PEER}"
         port=6032
         weight=0
         comment="Peer."
     }
-}
+)
 
 mysql_variables=
 {
