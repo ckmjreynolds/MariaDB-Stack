@@ -197,7 +197,7 @@ sudo systemctl stop mariadb
 
 # Setup this Node
 ./script/configureNode.sh <node>.<domain> <gtid_domain_id> <auto_increment_offset> \
-    "gcomm://db1.<domain>,db2.<domain>,db3.<domain>" <server_id> <wsrep_gtid_domain_id> "mariabackup password"
+    "gcomm://db1.<domain>,db2.<domain>,garb.<domain>" <server_id> <wsrep_gtid_domain_id> "mariabackup password"
 
 # Bootstrap (on db1) or start (on db2) mariadb.
 sudo systemctl enable mariadb
